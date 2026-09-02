@@ -1,6 +1,9 @@
 gravitee:
   mongodb:
-    enabled: true
+    enabled: false
+  mongo:
+    dbhost: gravitee-mongodb
+    rsEnabled: false
   elasticsearch:
     enabled: false
   es:
