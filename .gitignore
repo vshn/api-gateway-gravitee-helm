@@ -1,0 +1,11 @@
+# Helm package artifacts
+*.tgz
+*.prov
+charts/
+
+# IDE / OS
+.idea
+.vscode
+.zeditor
+.DS_Store
+*.swp

@@ -1,0 +1,11 @@
+apiVersion: v2
+name: gravitee-wrapper
+description: Wrapper chart for Gravitee APIM on APPUiO
+type: application
+version: 0.1.0
+appVersion: "4.12.18"
+dependencies:
+  - name: apim
+    version: 4.12.18
+    repository: https://helm.gravitee.io
+    alias: gravitee

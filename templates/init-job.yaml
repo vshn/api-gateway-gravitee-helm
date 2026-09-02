@@ -1,0 +1,121 @@
+{{- if .Values.initJob.enabled }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ .Release.Name }}-init
+  annotations:
+    helm.sh/hook: post-install,post-upgrade
+    helm.sh/hook-weight: "5"
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+spec:
+  backoffLimit: 3
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: init
+          image: "{{ .Values.initJob.image.repository }}:{{ .Values.initJob.image.tag }}"
+          imagePullPolicy: {{ .Values.initJob.image.pullPolicy }}
+          env:
+            - name: MAPI
+              value: "http://{{ .Release.Name }}-gravitee-api.{{ .Release.Namespace }}.svc.cluster.local:8083/management"
+            - name: ADMIN_USER
+              value: admin
+            - name: ADMIN_PASS
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Release.Name }}-gravitee-api-admin
+                  key: password
+                  optional: true
+            # fallback if secret not present (default gravitee admin/admin)
+            - name: ADMIN_PASS_FALLBACK
+              value: admin
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              set -eu
+              # ponytail: naive retry + idempotent; upgrade path: operator if init grows
+              PASS="${ADMIN_PASS:-$ADMIN_PASS_FALLBACK}"
+              AUTH="-u ${ADMIN_USER}:${PASS}"
+              ENVS="organizations/DEFAULT/environments/DEFAULT"
+              MAPI_URL="${MAPI}"
+
+              echo "waiting for management API..."
+              for i in $(seq 1 60); do
+                if curl -sf $AUTH "${MAPI_URL}/v2/${ENVS}/apis" >/dev/null 2>&1; then echo "mapi ready"; break; fi
+                # try fallback admin/admin if secret auth failed
+                if curl -sf -u admin:admin "${MAPI_URL}/v2/${ENVS}/apis" >/dev/null 2>&1; then AUTH="-u admin:admin"; echo "mapi ready (fallback)"; break; fi
+                echo "retry $i"; sleep 5
+              done
+
+              APIS=$(curl -sf $AUTH "${MAPI_URL}/v2/${ENVS}/apis")
+              API_ID=$(echo "$APIS" | jq -r '.data[] | select(.name=="httpbun PoC API") | .id' | head -1)
+              if [ -z "$API_ID" ] || [ "$API_ID" = "null" ]; then
+                echo "creating API httpbun PoC API"
+                API_ID=$(curl -sf $AUTH -X POST -H 'Content-Type: application/json' "${MAPI_URL}/v2/${ENVS}/apis" -d '{
+                  "name": "httpbun PoC API",
+                  "apiVersion": "1.0.0",
+                  "definitionVersion": "V4",
+                  "type": "PROXY",
+                  "listeners": [{"type": "HTTP","paths": [{"path": "/httpbun"}],"entrypoints": [{"type": "http-proxy"}]}],
+                  "endpointGroups": [{"name": "default-group","type": "http-proxy","endpoints": [
+                    {"name": "default","type": "http-proxy","weight": 1,"inheritConfiguration": false,"configuration": {"target": "http://{{ .Release.Name }}-httpbun.{{ .Release.Namespace }}.svc.cluster.local:{{ .Values.httpbun.service.port }}"}}
+                  ]}]
+                }' | jq -r '.id')
+                echo "created $API_ID"
+                STATE=""
+              else
+                echo "api exists $API_ID"
+                STATE=$(echo "$APIS" | jq -r --arg id "$API_ID" '.data[] | select(.id==$id) | .state')
+              fi
+
+              PLANS=$(curl -sf $AUTH "${MAPI_URL}/v2/${ENVS}/apis/${API_ID}/plans")
+              PLAN_ID=$(echo "$PLANS" | jq -r '.data[] | select(.name=="API Key") | .id' | head -1)
+              if [ -z "$PLAN_ID" ] || [ "$PLAN_ID" = "null" ]; then
+                PLAN_ID=$(curl -sf $AUTH -X POST -H 'Content-Type: application/json' "${MAPI_URL}/v2/${ENVS}/apis/${API_ID}/plans" -d '{
+                  "definitionVersion": "V4","name": "API Key","security": {"type": "API_KEY"},"mode": "STANDARD"
+                }' | jq -r '.id')
+                echo "created plan $PLAN_ID"
+                curl -sf $AUTH -X POST "${MAPI_URL}/v2/${ENVS}/apis/${API_ID}/plans/${PLAN_ID}/_publish" >/dev/null
+                echo "published plan"
+              else
+                echo "plan exists $PLAN_ID"
+                # ensure published
+                STATUS=$(echo "$PLANS" | jq -r --arg id "$PLAN_ID" '.data[] | select(.id==$id) | .status')
+                if [ "$STATUS" != "PUBLISHED" ]; then
+                  curl -sf $AUTH -X POST "${MAPI_URL}/v2/${ENVS}/apis/${API_ID}/plans/${PLAN_ID}/_publish" >/dev/null || true
+                fi
+              fi
+
+              if [ "${STATE:-}" != "STARTED" ]; then
+                curl -sf $AUTH -X POST "${MAPI_URL}/v2/${ENVS}/apis/${API_ID}/_start" >/dev/null || true
+                echo "started api"
+              fi
+
+              # ensure gateway sync (5s in POC)
+              sleep 6
+
+              # create N applications + subscriptions (3 keys covering all upstreams)
+              for i in $(seq 1 {{ .Values.initJob.apiKeys }}); do
+                APP_NAME="app-$i"
+                EXIST=$(curl -sf $AUTH "${MAPI_URL}/v2/${ENVS}/applications" | jq -r --arg n "$APP_NAME" '.data[] | select(.name==$n) | .id' | head -1)
+                if [ -z "$EXIST" ] || [ "$EXIST" = "null" ]; then
+                  APP_RESP=$(curl -sf $AUTH -X POST -H 'Content-Type: application/json' "${MAPI_URL}/v2/${ENVS}/applications" -d "{\"name\":\"$APP_NAME\",\"description\":\"auto $APP_NAME\"}")
+                  APP_ID=$(echo "$APP_RESP" | jq -r '.id')
+                  echo "created app $APP_NAME $APP_ID"
+                else
+                  APP_ID="$EXIST"
+                  echo "app exists $APP_NAME $APP_ID"
+                fi
+                # subscription
+                SUBS=$(curl -sf $AUTH "${MAPI_URL}/v2/${ENVS}/applications/${APP_ID}/subscriptions" | jq -r --arg pid "$PLAN_ID" '.data[] | select(.plan==$pid) | .id' | head -1)
+                if [ -z "$SUBS" ] || [ "$SUBS" = "null" ]; then
+                  curl -sf $AUTH -X POST -H 'Content-Type: application/json' "${MAPI_URL}/v2/${ENVS}/applications/${APP_ID}/subscriptions" -d "{\"plan\":\"$PLAN_ID\"}" >/dev/null
+                  echo "subscribed $APP_NAME to $PLAN_ID"
+                else
+                  echo "subscription exists $APP_NAME"
+                fi
+              done
+
+              echo "init done — verify: curl -H \"X-Gravitee-Api-Key: <key>\" http://gateway/httpbun/get (401 without key, never hits httpbun)"
+{{- end }}

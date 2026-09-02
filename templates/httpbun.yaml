@@ -1,0 +1,52 @@
+{{- if .Values.httpbun.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}-httpbun
+  labels:
+    app.kubernetes.io/name: httpbun
+    app.kubernetes.io/instance: {{ .Release.Name }}
+spec:
+  replicas: {{ .Values.httpbun.replicaCount }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: httpbun
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: httpbun
+        app.kubernetes.io/instance: {{ .Release.Name }}
+    spec:
+      containers:
+        - name: httpbun
+          image: "{{ .Values.httpbun.image.repository }}:{{ .Values.httpbun.image.tag }}"
+          imagePullPolicy: {{ .Values.httpbun.image.pullPolicy }}
+          ports:
+            - containerPort: 80
+              name: http
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              cpu: 100m
+              memory: 128Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Release.Name }}-httpbun
+  labels:
+    app.kubernetes.io/name: httpbun
+    app.kubernetes.io/instance: {{ .Release.Name }}
+spec:
+  selector:
+    app.kubernetes.io/name: httpbun
+    app.kubernetes.io/instance: {{ .Release.Name }}
+  ports:
+    - port: {{ .Values.httpbun.service.port }}
+      targetPort: 80
+      protocol: TCP
+      name: http
+{{- end }}

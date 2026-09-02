@@ -1,0 +1,12 @@
+{{- if and .Values.gravitee.gateway.enabled (gt (int .Values.gravitee.gateway.replicaCount) 1) }}
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ .Release.Name }}-gateway-pdb
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: apim-gateway
+      app.kubernetes.io/instance: {{ .Release.Name }}
+{{- end }}

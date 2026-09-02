@@ -1,0 +1,142 @@
+gravitee:
+  # -- disable bundled deps, use external or AppCat
+  mongodb:
+    enabled: false
+  elasticsearch:
+    enabled: false
+  es:
+    enabled: false
+    # if AppCat Mongo is used, set mongo.uri / mongo.rs etc here
+
+  # -- core components (all enabled, ingress via openshift-default)
+  api:
+    enabled: true
+    replicaCount: 1
+    analytics:
+      type: none
+    ingress:
+      management:
+        enabled: true
+        ingressClassName: openshift-default
+        pathType: Prefix
+        path: /management
+        hosts:
+          - gravitee-wrapper.apps.cloudscale-lpg-2.appuio.cloud
+        annotations:
+          cert-manager.io/cluster-issuer: letsencrypt-production
+      portal:
+        enabled: true
+        ingressClassName: openshift-default
+        pathType: Prefix
+        path: /portal
+        hosts:
+          - gravitee-wrapper.apps.cloudscale-lpg-2.appuio.cloud
+        annotations:
+          cert-manager.io/cluster-issuer: letsencrypt-production
+    # extra env for OIDC (toggle via oidcAuth below or raw env)
+    # env: []
+
+  gateway:
+    enabled: true
+    replicaCount: 1
+    reporters:
+      elasticsearch:
+        enabled: false
+    ingress:
+      enabled: true
+      ingressClassName: openshift-default
+      pathType: Prefix
+      path: /
+      hosts:
+        - gravitee-wrapper.apps.cloudscale-lpg-2.appuio.cloud
+      annotations:
+        cert-manager.io/cluster-issuer: letsencrypt-production
+        haproxy.router.openshift.io/timeout: 2m
+
+  ui:
+    enabled: true
+    ingress:
+      enabled: true
+      ingressClassName: openshift-default
+      pathType: Prefix
+      path: /console
+      hosts:
+        - gravitee-wrapper.apps.cloudscale-lpg-2.appuio.cloud
+      annotations:
+        cert-manager.io/cluster-issuer: letsencrypt-production
+
+  portal:
+    enabled: true
+    ingress:
+      enabled: true
+      ingressClassName: openshift-default
+      pathType: Prefix
+      path: /
+      hosts:
+        - gravitee-wrapper.apps.cloudscale-lpg-2.appuio.cloud
+      annotations:
+        cert-manager.io/cluster-issuer: letsencrypt-production
+
+  # -- IdP (configurable, disabled by default — ponytail: wire via env or oidcAuth when needed)
+  oidcAuth:
+    enabled: false
+    # id: mockoidc
+    # clientId: gravitee
+    # clientSecret: gravitee-secret
+    # tokenEndpoint: https://idp.example.com/token
+    # authorizeEndpoint: https://idp.example.com/authorize
+    # userInfoEndpoint: https://idp.example.com/userinfo
+    # userLogoutEndpoint: https://idp.example.com/endsession
+    # scopes: [openid, email, profile]
+    # userMapping: {id: sub, email: email, firstname: given_name, lastname: family_name}
+    # roleMapping:
+    #   - condition: "{#jsonPath(#profile, '$.email') == 'dev@example.com'}"
+    #     roles: [ORGANIZATION:ADMIN, ENVIRONMENT:ADMIN]
+
+  # -- upstream DB connection (when mongodb.enabled=false, point here)
+  mongo:
+    dbhost: gravitee-mongodb
+    dbport: 27017
+    dbname: gravitee
+
+idp:
+  enabled: false
+  id: mockoidc
+  clientId: gravitee
+  clientSecret: gravitee-secret
+  tokenEndpoint: http://idp:8110/default/token
+  authorizeEndpoint: http://idp:8110/default/authorize
+  userInfoEndpoint: http://idp:8110/default/userinfo
+  userLogoutEndpoint: http://idp:8110/default/endsession
+  scopes: [openid, email, profile]
+  userMapping:
+    id: sub
+    email: email
+    firstname: given_name
+    lastname: family_name
+  roleMapping:
+    - condition: "{#jsonPath(#profile, '$.email') == 'dev@example.com'}"
+      roles: [ORGANIZATION:ADMIN, ENVIRONMENT:ADMIN]
+
+# -- wrapper-only
+httpbun:
+  enabled: true
+  replicaCount: 1
+  image:
+    repository: docker.io/sharat87/httpbun
+    tag: latest@sha256:538a126de2cd4235a8f1f87deb0d002791fd2d4f274033c4050961b6153a0a9a
+    pullPolicy: IfNotPresent
+  service:
+    port: 80
+
+initJob:
+  enabled: true
+  image:
+    repository: curlimages/curl
+    tag: 8.11.0
+    pullPolicy: IfNotPresent
+  # 3 API keys covering all upstreams; unauthorized never hits upstream (API_KEY plan)
+  apiKeys: 3
+
+# -- generic env -> Secret bridge (like litellm env: {})
+env: {}

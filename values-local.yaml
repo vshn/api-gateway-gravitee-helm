@@ -1,0 +1,38 @@
+gravitee:
+  mongodb:
+    enabled: true
+  elasticsearch:
+    enabled: false
+  es:
+    enabled: false
+  api:
+    analytics:
+      type: none
+    ingress:
+      management:
+        enabled: false
+      portal:
+        enabled: false
+  gateway:
+    reporters:
+      elasticsearch:
+        enabled: false
+    ingress:
+      enabled: false
+  ui:
+    ingress:
+      enabled: false
+  portal:
+    ingress:
+      enabled: false
+
+httpbun:
+  enabled: true
+
+initJob:
+  enabled: true
+
+idp:
+  enabled: false
+
+env: {}
