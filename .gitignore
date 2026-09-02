@@ -9,3 +9,4 @@ charts/
 .zeditor
 .DS_Store
 *.swp
+.playwright-cli/
