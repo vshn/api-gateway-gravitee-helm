@@ -15,13 +15,13 @@ gravitee:
   gateway: {ingress: {hosts: [your.host]}}
   oidcAuth: {enabled: false} # set when IdP ready; maps to api env OIDC
 httpbun: {enabled: true}
-initJob: {enabled: true, apiKeys: 3}
+initJob: {enabled: true, apiKeys: 3} # requires httpbun.enabled=true
 ```
 
-IdP: set `gravitee.oidcAuth` (clientId, tokenEndpoint etc). Not wired by default — `enabled:false`. POC ref: `management-api/gravitee.yml:549-565`.
+IdP: configure via `gravitee.oidcAuth` (clientId, tokenEndpoint, authorizeEndpoint etc). Disabled by default (`enabled:false`); wire via env when IdP is ready. See `values.yaml` `gravitee.oidcAuth` comments. POC ref: `management-api/gravitee.yml:549-565`.
 
 ## Init behaviour
-Post-install hook `templates/init-job.yaml` (like `setup-api.sh` but API_KEY not KEY_LESS). Idempotent: reuses API/plan/app if exists, publishes plan, starts API, waits 6s for gateway sync. Creates `app-1..app-N` and subscriptions; fetch keys via Management API `GET /applications/{id}/subscriptions` or Portal.
+Post-install hook `templates/init-job.yaml` (like `setup-api.sh` but API_KEY not KEY_LESS). Guarded by `httpbun.enabled && initJob.enabled` — disable both together. Idempotent: reuses API/plan/app if exists, publishes plan, starts API, waits 6s for gateway sync. Creates `app-1..app-N` and subscriptions via Portal API; fetch keys via Portal `GET /environments/DEFAULT/subscriptions?application={appId}` (or Management API equivalent).
 
 Unauthorized `curl http://gateway/httpbun/get` -> `401` from gateway, never hits httpbun.
 

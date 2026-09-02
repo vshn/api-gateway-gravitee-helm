@@ -99,25 +99,6 @@ gravitee:
     dbport: 27017
     dbname: gravitee
 
-idp:
-  enabled: false
-  id: mockoidc
-  clientId: gravitee
-  clientSecret: gravitee-secret
-  tokenEndpoint: http://idp:8110/default/token
-  authorizeEndpoint: http://idp:8110/default/authorize
-  userInfoEndpoint: http://idp:8110/default/userinfo
-  userLogoutEndpoint: http://idp:8110/default/endsession
-  scopes: [openid, email, profile]
-  userMapping:
-    id: sub
-    email: email
-    firstname: given_name
-    lastname: family_name
-  roleMapping:
-    - condition: "{#jsonPath(#profile, '$.email') == 'dev@example.com'}"
-      roles: [ORGANIZATION:ADMIN, ENVIRONMENT:ADMIN]
-
 # -- wrapper-only
 httpbun:
   enabled: true
@@ -130,7 +111,7 @@ httpbun:
     port: 80
 
 initJob:
-  enabled: true
+  enabled: true # requires httpbun.enabled=true (creates /httpbun API -> httpbun svc)
   image:
     repository: curlimages/curl
     tag: 8.11.0

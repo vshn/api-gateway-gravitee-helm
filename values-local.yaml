@@ -33,9 +33,6 @@ httpbun:
   enabled: true
 
 initJob:
-  enabled: true
-
-idp:
-  enabled: false
+  enabled: true # requires httpbun.enabled=true (creates /httpbun API)
 
 env: {}

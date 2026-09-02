@@ -7,6 +7,7 @@ spec:
   minAvailable: 1
   selector:
     matchLabels:
-      app.kubernetes.io/name: apim-gateway
+      app.kubernetes.io/name: gravitee
       app.kubernetes.io/instance: {{ .Release.Name }}
+      app.kubernetes.io/component: gateway
 {{- end }}
