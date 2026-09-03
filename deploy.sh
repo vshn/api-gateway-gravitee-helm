@@ -1,7 +1,8 @@
 #!/bin/sh
 set -eu
-RELEASE=my-gravitee
-NAMESPACE=gravitee
+RELEASE=gravitee-test
+NAMESPACE="vshn-api-gateway-gravitee-test"
+
 helm dependency update .
 helm upgrade --install "$RELEASE" . -n "$NAMESPACE" --create-namespace -f values.yaml -f values-local.yaml --set initJob.enabled=false --timeout 10m
 kubectl wait pod/mongodb-0 -n "$NAMESPACE" --for=condition=Ready --timeout=300s
