@@ -85,3 +85,16 @@ If adding `VSHNPostgreSQL`/`VSHNMongoDB` AppCat resource later (like `litellm/te
 
 ## Ponytail
 Kept 3 templates + 1 job. Skipped: custom gravitee.yml mount (use `gravitee.api.configuration`), extra Secrets/PDBs. Add when measured.
+
+## CI (test)
+Push triggers `.github/workflows/test.yml` (`environment: test`): fixed release
+`my-gravitee` in namespace `gravitee` (from `KUBECONFIG_TEST` context namespace).
+Preview builds `env.yaml`/`vars.yaml`/`secrets.yaml` from GH vars/secrets
+(excluding `KUBECONFIG_*`) and runs `helm diff upgrade`; deploy runs
+`helm upgrade --install --timeout 10m` with the same files.
+`values-local.yaml` is never used in CI. `test-stop.yml` (manual) uninstalls.
+
+## Kind
+Local kind users run `./deploy.sh` (fixed release `my-gravitee`, namespace
+`gravitee`): phase A installs with the init hook off, initiates the mongo
+replica set, phase B upgrades with the hook on, then shows pods/svc + init log.

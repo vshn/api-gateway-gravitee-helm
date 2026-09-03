@@ -1,0 +1,24 @@
+name: test-stop
+on:
+  workflow_dispatch:
+
+jobs:
+  stop:
+    runs-on: ubuntu-latest
+    environment: test
+    env:
+      KUBECONFIG: /tmp/github-ci.kubeconfig
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup
+        uses: ./.github/actions/setup
+        with:
+          KUBECONFIG_DATA: ${{ secrets.KUBECONFIG_TEST }}
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+
+      - name: Uninstall
+        run: helm uninstall my-gravitee -n gravitee

@@ -3,6 +3,12 @@
 *.prov
 charts/
 
+# CI-generated values overlays (built from GH vars/secrets, never commit)
+env.yaml
+vars.yaml
+secrets.yaml
+.github-ci.kubeconfig
+
 # IDE / OS
 .idea
 .vscode

@@ -1,0 +1,24 @@
+name: setup
+description: Write kubeconfig and derive CI env (fixed release my-gravitee)
+inputs:
+  KUBECONFIG_DATA:
+    description: kubeconfig file content
+    required: true
+runs:
+  using: composite
+  steps:
+    - name: Write kubeconfig
+      shell: bash
+      run: |
+        printf '%s' '${{ inputs.KUBECONFIG_DATA }}' > /tmp/github-ci.kubeconfig
+        chmod 600 /tmp/github-ci.kubeconfig
+    - name: Derive namespace and slugs
+      shell: bash
+      run: |
+        NAMESPACE=$(yq '.contexts[0].context.namespace' /tmp/github-ci.kubeconfig)
+        test "$NAMESPACE" = gravitee
+        echo "NAMESPACE=$NAMESPACE" >> "$GITHUB_ENV"
+        SLUG=$(printf '%s' '${{ github.ref_name }}' | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9]+/-/g; s/^-+//; s/-+$//')
+        echo "CI_COMMIT_REF_SLUG=$SLUG" >> "$GITHUB_ENV"
+        echo "CI_PROJECT_NAME=${GITHUB_REPOSITORY##*/}" >> "$GITHUB_ENV"
+        echo "release=my-gravitee namespace=$NAMESPACE ref=$SLUG project=${GITHUB_REPOSITORY##*/}"
