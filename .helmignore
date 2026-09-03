@@ -14,3 +14,4 @@
 # *.tgz at root is ignored via .gitignore, not .helmignore
 # Misc
 .github/
+deploy.sh

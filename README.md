@@ -26,11 +26,12 @@ Post-install hook `templates/init-job.yaml` (like `setup-api.sh` but API_KEY not
 Unauthorized `curl http://gateway/httpbun/get` -> `401` from gateway, never hits httpbun.
 
 ## Deploy (APPUiO)
+Fixed release name `gravitee` (like litellm) so names are predictable (`gravitee-gateway`, `gravitee-init`, ...).
 ```sh
 helm dependency update .
-helm upgrade --install my-gravitee . -n gravitee --create-namespace -f values.yaml
+helm upgrade --install gravitee . -n gravitee --create-namespace -f values.yaml
 # httpbun disabled:
-helm upgrade --install my-gravitee . --set httpbun.enabled=false --set initJob.enabled=false
+helm upgrade --install gravitee . --set httpbun.enabled=false --set initJob.enabled=false
 ```
 
 ## Local kind test
@@ -43,40 +44,16 @@ curl -Lo /tmp/kind https://kind.sigs.k8s.io/dl/v0.28.0/kind-linux-amd64 && chmod
 kind create cluster --name gravitee-test
 kubectl cluster-info --context kind-gravitee-test
 
-# external mongo workaround (gravitee-mongodb svc+deploy, mongo:6.0 --noauth, rsEnabled=false)
-cat > /tmp/mongo.yaml <<'YAML'
-apiVersion: v1
-kind: Service
-metadata: {name: gravitee-mongodb, namespace: gravitee}
-spec: {ports: [{port: 27017}], selector: {app: gravitee-mongodb}}
----
-apiVersion: apps/v1
-kind: Deployment
-metadata: {name: gravitee-mongodb, namespace: gravitee}
-spec:
-  selector: {matchLabels: {app: gravitee-mongodb}}
-  template:
-    metadata: {labels: {app: gravitee-mongodb}}
-    spec:
-      containers:
-      - name: mongodb
-        image: mongo:6.0
-        args: [--noauth]
-        ports: [{containerPort: 27017}]
-YAML
-kubectl apply -f /tmp/mongo.yaml
-
-# deploy wrapper chart
-helm dependency update .
-helm upgrade --install my-gravitee . -n gravitee --create-namespace -f values.yaml -f values-local.yaml --timeout 10m
+# deploy (fixed release `gravitee`): phase A hook off, rs.initiate, phase B hook on
+./deploy.sh
 kubectl get pods -n gravitee
 kubectl get svc -n gravitee
 
 # verify gateway (401 without key, 200 with key from initJob logs)
-kubectl port-forward -n gravitee svc/my-gravitee-gateway 9082:82 &
+kubectl port-forward -n gravitee svc/gravitee-gateway 9082:82 &
 curl -s http://localhost:9082/httpbun/get  # 401
 curl -H "X-Gravitee-Api-Key: <KEY>" http://localhost:9082/httpbun/get  # 200
-# <KEY> from: kubectl logs -n gravitee job/my-gravitee-init  OR  kubectl get secret my-gravitee-init-keys -n gravitee -o jsonpath='{.data}' | jq
+# <KEY> from: kubectl logs -n gravitee job/gravitee-init  OR  kubectl get secret my-gravitee-init-keys -n gravitee -o jsonpath='{.data}' | jq
 ```
 
 ### Local baseURLs (kind port-forwards)
