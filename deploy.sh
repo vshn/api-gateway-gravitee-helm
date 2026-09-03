@@ -10,4 +10,4 @@ kubectl exec -n "$NAMESPACE" mongodb-0 -- mongosh -u root -p gravitee-kind-root 
 helm upgrade "$RELEASE" . -n "$NAMESPACE" -f values.yaml -f values-local.yaml --timeout 10m
 kubectl get pods -n "$NAMESPACE"
 kubectl get svc -n "$NAMESPACE"
-kubectl logs -n "$NAMESPACE" job/"$RELEASE"-init --tail=50
+kubectl logs -n "$NAMESPACE" job/"$RELEASE"-init --tail=50 || true

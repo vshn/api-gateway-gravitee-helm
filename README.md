@@ -44,16 +44,16 @@ curl -Lo /tmp/kind https://kind.sigs.k8s.io/dl/v0.28.0/kind-linux-amd64 && chmod
 kind create cluster --name gravitee-test
 kubectl cluster-info --context kind-gravitee-test
 
-# deploy (fixed release `gravitee`): phase A hook off, rs.initiate, phase B hook on
+# deploy (fixed release `my-gravitee`, or just run ./deploy.sh): phase A hook off, rs.initiate, phase B hook on
 ./deploy.sh
 kubectl get pods -n gravitee
 kubectl get svc -n gravitee
 
 # verify gateway (401 without key, 200 with key from initJob logs)
-kubectl port-forward -n gravitee svc/gravitee-gateway 9082:82 &
+kubectl port-forward -n gravitee svc/my-gravitee-gateway 9082:82 &
 curl -s http://localhost:9082/httpbun/get  # 401
 curl -H "X-Gravitee-Api-Key: <KEY>" http://localhost:9082/httpbun/get  # 200
-# <KEY> from: kubectl logs -n gravitee job/gravitee-init  OR  kubectl get secret my-gravitee-init-keys -n gravitee -o jsonpath='{.data}' | jq
+# <KEY> from: kubectl logs -n gravitee job/my-gravitee-init  OR  kubectl get secret my-gravitee-init-keys -n gravitee -o jsonpath='{.data}' | jq
 ```
 
 ### Local baseURLs (kind port-forwards)
@@ -86,13 +86,13 @@ If adding `VSHNPostgreSQL`/`VSHNMongoDB` AppCat resource later (like `litellm/te
 ## Ponytail
 Kept 3 templates + 1 job. Skipped: custom gravitee.yml mount (use `gravitee.api.configuration`), extra Secrets/PDBs. Add when measured.
 
-## CI (test)
-Push triggers `.github/workflows/test.yml` (`environment: test`): fixed release
-`my-gravitee` in namespace `gravitee` (from `KUBECONFIG_TEST` context namespace).
-Preview builds `env.yaml`/`vars.yaml`/`secrets.yaml` from GH vars/secrets
-(excluding `KUBECONFIG_*`) and runs `helm diff upgrade`; deploy runs
-`helm upgrade --install --timeout 10m` with the same files.
-`values-local.yaml` is never used in CI. `test-stop.yml` (manual) uninstalls.
+## Deploy to test (CI)
+Every push runs `.github/workflows/test.yml` (`environment: test`): `helm diff`
+preview + `helm upgrade --install` of fixed release `my-gravitee` into the
+namespace from the `KUBECONFIG_TEST` kubeconfig context. Branch delete or manual
+dispatch runs `.github/workflows/test-stop.yml`, which uninstalls it (shared
+release reset). Requires the `KUBECONFIG_TEST` secret on the `test` environment.
+`values-local.yaml` is never used in CI.
 
 ## Kind
 Local kind users run `./deploy.sh` (fixed release `my-gravitee`, namespace

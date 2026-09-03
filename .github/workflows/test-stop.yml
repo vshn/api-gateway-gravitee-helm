@@ -1,24 +1,22 @@
 name: test-stop
-on:
-  workflow_dispatch:
+"on":
+  delete: {}
+  workflow_dispatch: {}
+
+env:
+  KUBECONFIG: /tmp/github-ci.kubeconfig
 
 jobs:
   stop:
-    runs-on: ubuntu-latest
     environment: test
-    env:
-      KUBECONFIG: /tmp/github-ci.kubeconfig
+    runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup
-        uses: ./.github/actions/setup
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
         with:
           KUBECONFIG_DATA: ${{ secrets.KUBECONFIG_TEST }}
 
-      - name: Set up Helm
-        uses: azure/setup-helm@v4
-
-      - name: Uninstall
-        run: helm uninstall my-gravitee -n gravitee
+      - name: Helm Chart stop
+        run: |
+          cp "${KUBECONFIG}" ".github-ci.kubeconfig"
+          docker run -v "${PWD}:/data" -w /data ghcr.io/appuio/helm-v4:latest /bin/bash -c "cp .github-ci.kubeconfig /tmp/github-ci.kubeconfig; chmod 400 /tmp/github-ci.kubeconfig; /bin/helm uninstall 'gravitee-test' --namespace '${NAMESPACE}' --kubeconfig /tmp/github-ci.kubeconfig"

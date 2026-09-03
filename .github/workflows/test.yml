@@ -1,38 +1,41 @@
 name: test
-on:
-  push:
-  workflow_dispatch:
+"on":
+  push: {}
+  workflow_dispatch: {}
+
+env:
+  KUBECONFIG: /tmp/github-ci.kubeconfig
 
 jobs:
   test:
-    runs-on: ubuntu-latest
     environment: test
-    env:
-      KUBECONFIG: /tmp/github-ci.kubeconfig
-      RELEASE_NAME: my-gravitee
+    runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup
-        uses: ./.github/actions/setup
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
         with:
           KUBECONFIG_DATA: ${{ secrets.KUBECONFIG_TEST }}
 
-      - name: Set up Helm
-        uses: azure/setup-helm@v4
+      - env:
+          NEWLINE: |2+
 
-      - name: Install helm-diff
-        run: helm plugin install https://github.com/databus23/helm-diff
-
-      - name: Preview
+        name: Helm Chart preview
         run: |
-          printf '%s' '${{ toJson(vars) }}' | jq 'with_entries(select(.key | startswith("KUBECONFIG_") | not)) | {env: .}' > env.yaml
-          printf '%s' '${{ toJson(vars) }}' | jq 'with_entries(select(.key | startswith("KUBECONFIG_") | not))' > vars.yaml
-          printf '%s' '${{ toJson(secrets) }}' | jq 'with_entries(select(.key | startswith("KUBECONFIG_") | not)) | {env: .}' > secrets.yaml
-          docker run --rm -v "$PWD:/work" -w /work ghcr.io/appuio/helm-v4:latest dependency update .
-          HELM_DIFF_USE_UPGRADE_DRY_RUN=true helm diff upgrade "$RELEASE_NAME" --namespace "$NAMESPACE" -f values.yaml -f env.yaml -f vars.yaml -f secrets.yaml --allow-unreleased .
+          jq -n '.env=(env | with_entries(select(.key | startswith("KUBECONFIG_") | not)))' > ${PWD}/env.yaml
+          jq 'select(.!=null)|{vars:.,env:.}' > "${PWD}/vars.yaml" <<'EOF' ${{ env.NEWLINE }}${{ toJson(vars) }}${{ env.NEWLINE }}EOF
+          jq 'select(.!=null)|{secrets:.,env:.}' > "${PWD}/secrets.yaml" <<'EOF' ${{ env.NEWLINE }}${{ toJson(secrets) }}${{ env.NEWLINE }}EOF
 
-      - name: Deploy
+          cp "${KUBECONFIG}" ".github-ci.kubeconfig"
+          docker run --user root -v "${PWD}:/data" -w /data ghcr.io/appuio/helm-v4:latest /bin/bash -c "cp .github-ci.kubeconfig /tmp/github-ci.kubeconfig; chmod 400 /tmp/github-ci.kubeconfig; /bin/helm dependency update /data; HELM_DIFF_USE_UPGRADE_DRY_RUN=true /bin/helm diff upgrade 'gravitee-test' /data --namespace '${NAMESPACE}' --values "/data/values.yaml" --values "/data/env.yaml" --values /data/vars.yaml --values /data/secrets.yaml --kubeconfig /tmp/github-ci.kubeconfig --allow-unreleased"
+
+      - env:
+          NEWLINE: |2+
+
+        name: Helm Chart deploy
         run: |
-          helm upgrade --install "$RELEASE_NAME" . --namespace "$NAMESPACE" --create-namespace -f values.yaml -f env.yaml -f vars.yaml -f secrets.yaml --timeout 10m
+          jq -n '.env=(env | with_entries(select(.key | startswith("KUBECONFIG_") | not)))' > ${PWD}/env.yaml
+          jq 'select(.!=null)|{vars:.,env:.}' > "${PWD}/vars.yaml" <<'EOF' ${{ env.NEWLINE }}${{ toJson(vars) }}${{ env.NEWLINE }}EOF
+          jq 'select(.!=null)|{secrets:.,env:.}' > "${PWD}/secrets.yaml" <<'EOF' ${{ env.NEWLINE }}${{ toJson(secrets) }}${{ env.NEWLINE }}EOF
+
+          cp "${KUBECONFIG}" ".github-ci.kubeconfig"
+          docker run --user root -v "${PWD}:/data" -w /data ghcr.io/appuio/helm-v4:latest /bin/bash -c "cp .github-ci.kubeconfig /tmp/github-ci.kubeconfig; chmod 400 /tmp/github-ci.kubeconfig; /bin/helm dependency update /data; /bin/helm upgrade --install 'gravitee-test' /data --namespace '${NAMESPACE}' --create-namespace --values "/data/values.yaml" --values "/data/env.yaml" --values /data/vars.yaml --values /data/secrets.yaml --kubeconfig /tmp/github-ci.kubeconfig"
