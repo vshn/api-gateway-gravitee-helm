@@ -33,6 +33,15 @@ gravitee:
           - vshn-gravitee-wrapper-test.apps.cloudscale-lpg-2.appuio.cloud
         annotations:
           cert-manager.io/cluster-issuer: letsencrypt-production
+    deployment:
+      securityContext:
+        runAsUser: null
+        runAsGroup: null
+        allowPrivilegeEscalation: false
+        capabilities:
+          drop: [ "ALL" ]
+        seccompProfile:
+          type: RuntimeDefault
     # extra env for OIDC (toggle via oidcAuth below or raw env)
     # env: []
 
@@ -52,6 +61,15 @@ gravitee:
       annotations:
         cert-manager.io/cluster-issuer: letsencrypt-production
         haproxy.router.openshift.io/timeout: 2m
+    deployment:
+      securityContext:
+        runAsUser: null
+        runAsGroup: null
+        allowPrivilegeEscalation: false
+        capabilities:
+          drop: [ "ALL" ]
+        seccompProfile:
+          type: RuntimeDefault
 
   ui:
     enabled: true
@@ -64,6 +82,15 @@ gravitee:
         - vshn-gravitee-wrapper-test.apps.cloudscale-lpg-2.appuio.cloud
       annotations:
         cert-manager.io/cluster-issuer: letsencrypt-production
+    deployment:
+      securityContext:
+        runAsUser: null
+        runAsGroup: null
+        allowPrivilegeEscalation: false
+        capabilities:
+          drop: [ "ALL" ]
+        seccompProfile:
+          type: RuntimeDefault
 
   portal:
     enabled: true
@@ -76,6 +103,15 @@ gravitee:
         - vshn-gravitee-wrapper-test.apps.cloudscale-lpg-2.appuio.cloud
       annotations:
         cert-manager.io/cluster-issuer: letsencrypt-production
+    deployment:
+      securityContext:
+        runAsUser: null
+        runAsGroup: null
+        allowPrivilegeEscalation: false
+        capabilities:
+          drop: [ "ALL" ]
+        seccompProfile:
+          type: RuntimeDefault
 
   # -- IdP (configurable, disabled by default — ponytail: wire via env or oidcAuth when needed)
   oidcAuth:

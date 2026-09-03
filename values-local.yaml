@@ -11,6 +11,16 @@ gravitee:
   api:
     analytics:
       type: none
+    deployment:
+      securityContext:
+        runAsUser: 1003120000
+        runAsGroup: 0
+        runAsNonRoot: true
+        allowPrivilegeEscalation: false
+        capabilities:
+          drop: ["ALL"]
+        seccompProfile:
+          type: RuntimeDefault
     ingress:
       management:
         enabled: false
@@ -23,14 +33,44 @@ gravitee:
     reporters:
       elasticsearch:
         enabled: false
+    deployment:
+      securityContext:
+        runAsUser: 1003120000
+        runAsGroup: 0
+        runAsNonRoot: true
+        allowPrivilegeEscalation: false
+        capabilities:
+          drop: ["ALL"]
+        seccompProfile:
+          type: RuntimeDefault
     ingress:
       enabled: false
   ui:
     baseURL: http://localhost:8083/management
+    deployment:
+      securityContext:
+        runAsUser: 1003120000
+        runAsGroup: 0
+        runAsNonRoot: true
+        allowPrivilegeEscalation: false
+        capabilities:
+          drop: ["ALL"]
+        seccompProfile:
+          type: RuntimeDefault
     ingress:
       enabled: false
   portal:
     baseURL: http://localhost:8083/portal
+    deployment:
+      securityContext:
+        runAsUser: 1003120000
+        runAsGroup: 0
+        runAsNonRoot: true
+        allowPrivilegeEscalation: false
+        capabilities:
+          drop: ["ALL"]
+        seccompProfile:
+          type: RuntimeDefault
     ingress:
       enabled: false
 

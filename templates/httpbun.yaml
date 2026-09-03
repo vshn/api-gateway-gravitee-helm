@@ -23,8 +23,11 @@ spec:
           image: "{{ .Values.httpbun.image.repository }}:{{ .Values.httpbun.image.tag }}"
           imagePullPolicy: {{ .Values.httpbun.image.pullPolicy }}
           ports:
-            - containerPort: 80
+            - containerPort: 8080
               name: http
+          args:
+            - "--bind"
+            - "0.0.0.0:8080"
           resources:
             requests:
               cpu: 10m
