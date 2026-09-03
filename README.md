@@ -26,12 +26,12 @@ Post-install hook `templates/init-job.yaml` (like `setup-api.sh` but API_KEY not
 Unauthorized `curl http://gateway/httpbun/get` -> `401` from gateway, never hits httpbun.
 
 ## Deploy (APPUiO)
-Fixed release name `gravitee` (like litellm) so names are predictable (`gravitee-gateway`, `gravitee-init`, ...).
+Fixed release name `my-gravitee` (like litellm) so names are predictable (`my-gravitee-gateway`, `my-gravitee-init`, ...) in namespace `gravitee`.
 ```sh
 helm dependency update .
-helm upgrade --install gravitee . -n gravitee --create-namespace -f values.yaml
+helm upgrade --install my-gravitee . -n gravitee --create-namespace -f values.yaml
 # httpbun disabled:
-helm upgrade --install gravitee . --set httpbun.enabled=false --set initJob.enabled=false
+helm upgrade --install my-gravitee . --set httpbun.enabled=false --set initJob.enabled=false
 ```
 
 ## Local kind test
@@ -89,8 +89,8 @@ Kept 3 templates + 1 job. Skipped: custom gravitee.yml mount (use `gravitee.api.
 ## Deploy to test (CI)
 Every push runs `.github/workflows/test.yml` (`environment: test`): `helm diff`
 preview + `helm upgrade --install` of fixed release `my-gravitee` into the
-namespace from the `KUBECONFIG_TEST` kubeconfig context. Branch delete or manual
-dispatch runs `.github/workflows/test-stop.yml`, which uninstalls it (shared
+namespace from the `KUBECONFIG_TEST` kubeconfig context. Manual dispatch runs
+`.github/workflows/test-stop.yml`, which uninstalls it (shared
 release reset). Requires the `KUBECONFIG_TEST` secret on the `test` environment.
 `values-local.yaml` is never used in CI.
 
