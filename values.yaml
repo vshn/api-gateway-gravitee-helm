@@ -155,8 +155,8 @@ httpbun:
 initJob:
   enabled: true # requires httpbun.enabled=true (creates /httpbun API -> httpbun svc)
   image:
-    repository: curlimages/curl
-    tag: 8.11.0
+    repository: ghcr.io/digitalocean-packages/doks-debug
+    tag: latest@sha256:55d72c171c3549aec74fc41088f4162e8b48d4da6bcbd98dcaf2c1cbc85c2a99
     pullPolicy: IfNotPresent
   # 3 API keys covering all upstreams; unauthorized never hits upstream (API_KEY plan)
   apiKeys: 3
