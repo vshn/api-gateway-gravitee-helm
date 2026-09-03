@@ -16,6 +16,9 @@ gravitee:
         enabled: false
       portal:
         enabled: false
+  installation:
+    api:
+      url: http://localhost:8083
   gateway:
     reporters:
       elasticsearch:
@@ -23,9 +26,11 @@ gravitee:
     ingress:
       enabled: false
   ui:
+    baseURL: http://localhost:8083/management
     ingress:
       enabled: false
   portal:
+    baseURL: http://localhost:8083/portal
     ingress:
       enabled: false
 

@@ -79,6 +79,27 @@ curl -H "X-Gravitee-Api-Key: <KEY>" http://localhost:9082/httpbun/get  # 200
 # <KEY> from: kubectl logs -n gravitee job/my-gravitee-init  OR  kubectl get secret my-gravitee-init-keys -n gravitee -o jsonpath='{.data}' | jq
 ```
 
+### Local baseURLs (kind port-forwards)
+
+With all ingresses disabled the chart falls back to `https://apim.example.com`, which is
+unreachable from a browser. `values-local.yaml` pins reachable localhost URLs:
+
+- `gravitee.ui.baseURL: http://localhost:8083/management` (console `constants.json`)
+- `gravitee.portal.baseURL: http://localhost:8083/portal` (portal `assets/config.json`)
+- `gravitee.installation.api.url: http://localhost:8083` (portal `/ui/bootstrap`; without it the portal UI ignores the ConfigMaps and calls `apim.example.com`)
+
+Forward `8083:83` (api), `9082:82` (gateway), `8085:8003` (portal), `8084:8002` (console).
+`values.yaml` (prod) stays free of localhost.
+
+### Portal 2-key demo (screenshots in `docs/screenshots/`)
+
+`01-login.png`, `02-api-detail.png` (httpbun PoC API), `03-application.png` (demo-app-1),
+`04-subscription.png`, `05-key-1.png`, `06-key-2.png` (viewport 1280x800, `demo@example.com`).
+Demo subscriptions were closed after the shoot, so pictured keys now return 401; gateway
+proof during the shoot: no key 401, KEY1 200, KEY2 200.
+Note: the `httpbun PoC API` needs lifecycleState PUBLISHED + visibility PUBLIC to appear
+in the portal catalog (`PUT /management/v2/.../apis/{id}` with full body).
+
 ## Publishing
 Tag `v*` triggers `.github/workflows/helm-release.yml` -> `oci://ghcr.io/<owner>/helm-charts`.
 
