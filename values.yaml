@@ -1,5 +1,5 @@
 gravitee:
-  # -- disable bundled deps, use external or AppCat
+  # -- vendored mongo enabled below; bundled es disabled
   mongodb:
     enabled: false
   elasticsearch:
@@ -93,11 +93,17 @@ gravitee:
     #   - condition: "{#jsonPath(#profile, '$.email') == 'dev@example.com'}"
     #     roles: [ORGANIZATION:ADMIN, ENVIRONMENT:ADMIN]
 
-  # -- upstream DB connection (when mongodb.enabled=false, point here)
+  # -- inline vendored mongo (password in values.secret.yaml, see values.secret.example.yaml)
   mongo:
-    dbhost: gravitee-mongodb
+    dbhost: mongodb-0.vshn-api-gateway-gravitee-test.svc.cluster.local
     dbport: 27017
     dbname: gravitee
+    rsEnabled: true
+    rs: mongodb-nunki
+    auth:
+      enabled: true
+      source: admin
+      username: root
 
 # -- wrapper-only
 httpbun:

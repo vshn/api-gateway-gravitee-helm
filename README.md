@@ -26,12 +26,13 @@ Post-install hook `templates/init-job.yaml` (like `setup-api.sh` but API_KEY not
 Unauthorized `curl http://gateway/httpbun/get` -> `401` from gateway, never hits httpbun.
 
 ## Deploy (APPUiO)
-Fixed release name `my-gravitee` (like litellm) so names are predictable (`my-gravitee-gateway`, `my-gravitee-init`, ...) in namespace `gravitee`.
+Fixed release name `gravitee-test` (like litellm) so names are predictable (`gravitee-test-gateway`, `gravitee-test-init`, ...) in namespace `vshn-api-gateway-gravitee-test`.
 ```sh
 helm dependency update .
-helm upgrade --install my-gravitee . -n gravitee --create-namespace -f values.yaml
+# -f values.secret.yaml (git-ignored) falls back to values.secret.example.yaml, as in deploy.sh/test.yml
+helm upgrade --install gravitee-test . -n vshn-api-gateway-gravitee-test --create-namespace -f values.yaml -f values.secret.yaml
 # httpbun disabled:
-helm upgrade --install my-gravitee . --set httpbun.enabled=false --set initJob.enabled=false
+helm upgrade --install gravitee-test . --set httpbun.enabled=false --set initJob.enabled=false -f values.secret.yaml
 ```
 
 ## Local kind test
@@ -44,16 +45,16 @@ curl -Lo /tmp/kind https://kind.sigs.k8s.io/dl/v0.28.0/kind-linux-amd64 && chmod
 kind create cluster --name gravitee-test
 kubectl cluster-info --context kind-gravitee-test
 
-# deploy (fixed release `my-gravitee`, or just run ./deploy.sh): phase A hook off, rs.initiate, phase B hook on
+# deploy (fixed release `gravitee-test`, or just run ./deploy.sh): phase A hook off, rs.initiate, phase B hook on
 ./deploy.sh
-kubectl get pods -n gravitee
-kubectl get svc -n gravitee
+kubectl get pods -n vshn-api-gateway-gravitee-test
+kubectl get svc -n vshn-api-gateway-gravitee-test
 
 # verify gateway (401 without key, 200 with key from initJob logs)
-kubectl port-forward -n gravitee svc/my-gravitee-gateway 9082:82 &
+kubectl port-forward -n vshn-api-gateway-gravitee-test svc/gravitee-test-gateway 9082:82 &
 curl -s http://localhost:9082/httpbun/get  # 401
 curl -H "X-Gravitee-Api-Key: <KEY>" http://localhost:9082/httpbun/get  # 200
-# <KEY> from: kubectl logs -n gravitee job/my-gravitee-init  OR  kubectl get secret my-gravitee-init-keys -n gravitee -o jsonpath='{.data}' | jq
+# <KEY> from: kubectl logs -n vshn-api-gateway-gravitee-test job/gravitee-test-init  OR  kubectl get secret my-gravitee-init-keys -n gravitee -o jsonpath='{.data}' | jq
 ```
 
 ### Local baseURLs (kind port-forwards)
@@ -67,6 +68,22 @@ unreachable from a browser. `values-local.yaml` pins reachable localhost URLs:
 
 Forward `8083:83` (api), `9082:82` (gateway), `8085:8003` (portal), `8084:8002` (console).
 `values.yaml` (prod) stays free of localhost.
+
+### Secrets (kind test path)
+
+Mongo credentials are not committed: `deploy.sh` loads `values.secret.yaml`
+(git-ignored, create it from `values.secret.example.yaml`) and falls back to
+the example when the real file is absent. It feeds three keys:
+
+- `mongodb.env.MONGODB_ROOT_PASSWORD` — rendered into the `mongodb-env` Secret by the vendored chart. The StatefulSet `envFrom`s that Secret; on first boot the mongo entrypoint uses `MONGO_INITDB_ROOT_PASSWORD` (the chart sets it to the same value) to provision the `root` user with it.
+- `MONGODB_REPLICA_SET_KEY` — internal auth between replica-set members (`--keyFile`).
+- `gravitee.mongo.auth.password` — how Gravitee learns the password: the upstream apim chart renders it **in plaintext** into the `gravitee.yml` ConfigMap. There is no Secret bridge on the Gravitee side, so both sides just carry the same literal value (`gravitee-kind-root` in the example); change it in both places together.
+
+The CI/test path uses the same authenticated vendored mongo: `values.yaml`
+enables it with replica set `mongodb-nunki` and `mongo.auth`, and
+`.github/workflows/test.yml` layers `values.secret.example.yaml` on top of
+`values.yaml` — the same fallback `deploy.sh` uses when the real
+`values.secret.yaml` is absent.
 
 ### Portal 2-key demo (screenshots in `docs/screenshots/`)
 
@@ -88,13 +105,13 @@ Kept 3 templates + 1 job. Skipped: custom gravitee.yml mount (use `gravitee.api.
 
 ## Deploy to test (CI)
 Every push runs `.github/workflows/test.yml` (`environment: test`): `helm diff`
-preview + `helm upgrade --install` of fixed release `my-gravitee` into the
+preview + `helm upgrade --install` of fixed release `gravitee-test` into the
 namespace from the `KUBECONFIG_TEST` kubeconfig context. Manual dispatch runs
 `.github/workflows/test-stop.yml`, which uninstalls it (shared
 release reset). Requires the `KUBECONFIG_TEST` secret on the `test` environment.
 `values-local.yaml` is never used in CI.
 
 ## Kind
-Local kind users run `./deploy.sh` (fixed release `my-gravitee`, namespace
-`gravitee`): phase A installs with the init hook off, initiates the mongo
+Local kind users run `./deploy.sh` (fixed release `gravitee-test`, namespace
+`vshn-api-gateway-gravitee-test`): phase A installs with the init hook off, initiates the mongo
 replica set, phase B upgrades with the hook on, then shows pods/svc + init log.

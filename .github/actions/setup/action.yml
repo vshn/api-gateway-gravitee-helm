@@ -10,11 +10,10 @@ runs:
     - run: "echo -n '${{ inputs.KUBECONFIG_DATA }}' > \"${KUBECONFIG}\""
       shell: bash
     - run: |
-        echo "NAMESPACE=$(yq '.contexts.0.context.namespace' ${KUBECONFIG})" >> $GITHUB_ENV
-        if [ "${{ github.event_name }}" == "delete" ]; then
-          REF="$(echo '${{ github.event.ref }}' | sed -e 's,^/ref/[a-z]\+/,,')"
-        else
-          REF="$(echo '${{ github.ref_name }}')"
+        NAMESPACE=$(yq '.contexts.0.context.namespace' ${KUBECONFIG})
+        if [ "${NAMESPACE}" != "vshn-api-gateway-gravitee-test" ]; then
+          echo "::error::kubeconfig context namespace must be 'vshn-api-gateway-gravitee-test', got '${NAMESPACE}'"
+          exit 1
         fi
-        echo "CI_COMMIT_REF_SLUG=$(echo "${REF}" | sed -e 's/.*/\L&/' -e 's/[^a-z0-9]/-/g' -e 's/^[0-9-]*//' -e 's/-*$//' -e 's/-\+/-/g')" >> $GITHUB_ENV
+        echo "NAMESPACE=${NAMESPACE}" >> $GITHUB_ENV
       shell: bash
