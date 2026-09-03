@@ -21,7 +21,7 @@ gravitee:
         pathType: Prefix
         path: /management
         hosts:
-          - gravitee-wrapper.apps.cloudscale-lpg-2.appuio.cloud
+          - vshn-gravitee-wrapper-test.apps.cloudscale-lpg-2.appuio.cloud
         annotations:
           cert-manager.io/cluster-issuer: letsencrypt-production
       portal:
@@ -30,7 +30,7 @@ gravitee:
         pathType: Prefix
         path: /portal
         hosts:
-          - gravitee-wrapper.apps.cloudscale-lpg-2.appuio.cloud
+          - vshn-gravitee-wrapper-test.apps.cloudscale-lpg-2.appuio.cloud
         annotations:
           cert-manager.io/cluster-issuer: letsencrypt-production
     # extra env for OIDC (toggle via oidcAuth below or raw env)
@@ -48,7 +48,7 @@ gravitee:
       pathType: Prefix
       path: /
       hosts:
-        - gravitee-wrapper.apps.cloudscale-lpg-2.appuio.cloud
+        - vshn-gravitee-wrapper-test.apps.cloudscale-lpg-2.appuio.cloud
       annotations:
         cert-manager.io/cluster-issuer: letsencrypt-production
         haproxy.router.openshift.io/timeout: 2m
@@ -61,7 +61,7 @@ gravitee:
       pathType: Prefix
       path: /console
       hosts:
-        - gravitee-wrapper.apps.cloudscale-lpg-2.appuio.cloud
+        - vshn-gravitee-wrapper-test.apps.cloudscale-lpg-2.appuio.cloud
       annotations:
         cert-manager.io/cluster-issuer: letsencrypt-production
 
@@ -73,7 +73,7 @@ gravitee:
       pathType: Prefix
       path: /
       hosts:
-        - gravitee-wrapper.apps.cloudscale-lpg-2.appuio.cloud
+        - vshn-gravitee-wrapper-test.apps.cloudscale-lpg-2.appuio.cloud
       annotations:
         cert-manager.io/cluster-issuer: letsencrypt-production
 
