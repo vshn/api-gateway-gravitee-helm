@@ -1,9 +1,13 @@
 gravitee:
   mongodb:
     enabled: false
-  mongo:
-    dbhost: gravitee-mongodb
-    rsEnabled: false
+  management:
+    type: jdbc
+  ratelimit:
+    type: jdbc
+  jdbc:
+    url: jdbc:postgresql://gravitee-test-postgresql:5432/gravitee
+    username: gravitee
   elasticsearch:
     enabled: false
   es:
@@ -111,6 +115,9 @@ gravitee:
       path: /
       hosts:
         - gravitee.local.test
+
+postgresql:
+  enabled: true
 
 httpbun:
   enabled: true

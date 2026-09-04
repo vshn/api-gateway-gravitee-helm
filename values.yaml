@@ -1,12 +1,11 @@
 gravitee:
-  # -- vendored mongo enabled below; bundled es disabled
+  # -- bundled mongo/es disabled (we bring our own postgres)
   mongodb:
     enabled: false
   elasticsearch:
     enabled: false
   es:
     enabled: false
-    # if AppCat Mongo is used, set mongo.uri / mongo.rs etc here
 
   # -- core components (all enabled, ingress via openshift-default)
   api:
@@ -121,19 +120,27 @@ gravitee:
     #   - condition: "{#jsonPath(#profile, '$.email') == 'dev@example.com'}"
     #     roles: [ORGANIZATION:ADMIN, ENVIRONMENT:ADMIN]
 
-  # -- inline vendored mongo (password in values.secret.yaml, see values.secret.example.yaml)
-  mongo:
-    dbhost: mongodb-0.vshn-api-gateway-gravitee-test.svc.cluster.local
-    dbport: 27017
-    dbname: gravitee
-    rsEnabled: true
-    rs: mongodb-nunki
-    auth:
-      enabled: true
-      source: admin
-      username: root
+  # -- JDBC repositories (password in values.secret.yaml, see values.secret.example.yaml)
+  management:
+    type: jdbc
+  ratelimit:
+    type: jdbc
+  jdbc:
+    url: jdbc:postgresql://gravitee-test-postgresql:5432/gravitee
+    username: gravitee
+    # PostgreSQL driver is bundled in the APIM images (jdbc.driverSource=auto)
 
 # -- wrapper-only
+# -- bundled single-replica postgres (password in values.secret.yaml, see values.secret.example.yaml)
+#    external DB later: postgresql.enabled=false + point gravitee.jdbc.url/username/password at it
+postgresql:
+  enabled: true
+  user: gravitee
+  database: gravitee
+  storage: 5Gi
+  image:
+    repository: dockerhub.vshn.net/library/postgres
+    tag: "16"
 httpbun:
   enabled: true
   replicaCount: 1
