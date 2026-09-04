@@ -11,6 +11,8 @@ gravitee:
   api:
     analytics:
       type: none
+    # portal URL used in emails (chart template hardcodes https:// otherwise)
+    portalURL: http://gravitee.local.test:8080/
     deployment:
       securityContext:
         runAsUser: 1003120000
@@ -23,12 +25,27 @@ gravitee:
           type: RuntimeDefault
     ingress:
       management:
-        enabled: false
+        enabled: true
+        ingressClassName: nginx
+        scheme: http
+        hosts:
+          - gravitee.local.test
       portal:
-        enabled: false
+        enabled: true
+        ingressClassName: nginx
+        scheme: http
+        hosts:
+          - gravitee.local.test
   installation:
     api:
-      url: http://localhost:8083
+      url: http://gravitee.local.test:8080
+    standalone:
+      console:
+        urls:
+          - http://gravitee.local.test:8080/console
+      portal:
+        urls:
+          - http://gravitee.local.test:8080/
   gateway:
     reporters:
       elasticsearch:
@@ -44,9 +61,15 @@ gravitee:
         seccompProfile:
           type: RuntimeDefault
     ingress:
-      enabled: false
+      enabled: true
+      ingressClassName: nginx
+      scheme: http
+      pathType: Prefix
+      path: /httpbun
+      hosts:
+        - gravitee.local.test
   ui:
-    baseURL: http://localhost:8083/management
+    baseURL: http://gravitee.local.test:8080/management
     deployment:
       securityContext:
         runAsUser: 1003120000
@@ -58,9 +81,18 @@ gravitee:
         seccompProfile:
           type: RuntimeDefault
     ingress:
-      enabled: false
+      enabled: true
+      ingressClassName: nginx
+      scheme: http
+      pathType: ImplementationSpecific
+      # console app is served at container root; strip the /console prefix
+      path: /console(/|$)(.*)
+      annotations:
+        nginx.ingress.kubernetes.io/rewrite-target: /$2
+      hosts:
+        - gravitee.local.test
   portal:
-    baseURL: http://localhost:8083/portal
+    baseURL: http://gravitee.local.test:8080/portal
     deployment:
       securityContext:
         runAsUser: 1003120000
@@ -72,7 +104,13 @@ gravitee:
         seccompProfile:
           type: RuntimeDefault
     ingress:
-      enabled: false
+      enabled: true
+      ingressClassName: nginx
+      scheme: http
+      pathType: Prefix
+      path: /
+      hosts:
+        - gravitee.local.test
 
 httpbun:
   enabled: true

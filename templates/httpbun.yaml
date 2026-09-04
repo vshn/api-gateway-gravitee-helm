@@ -49,7 +49,7 @@ spec:
     app.kubernetes.io/instance: {{ .Release.Name }}
   ports:
     - port: {{ .Values.httpbun.service.port }}
-      targetPort: 80
+      targetPort: 8080
       protocol: TCP
       name: http
 {{- end }}

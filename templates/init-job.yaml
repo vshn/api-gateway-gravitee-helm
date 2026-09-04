@@ -94,6 +94,15 @@ spec:
                 echo "started api"
               fi
 
+              # catalog-visible: PUBLISHED + PUBLIC (v2 PUT needs the full body back)
+              API_BODY=$(curl -sf -u "$ADMIN_USER:$PASS" "${MAPI_URL}/v2/${ENVS}/apis/${API_ID}")
+              CUR=$(echo "$API_BODY" | jq -r '[.lifecycleState,.visibility] | join("/")')
+              if [ "$CUR" != "PUBLISHED/PUBLIC" ]; then
+                echo "$API_BODY" | jq 'if .lifecycleState == "CREATED" then .lifecycleState = "PUBLISHED" else . end | .visibility = "PUBLIC"' > /tmp/api-body.json
+                curl -sf -u "$ADMIN_USER:$PASS" -X PUT -H 'Content-Type: application/json' "${MAPI_URL}/v2/${ENVS}/apis/${API_ID}" -d @/tmp/api-body.json >/dev/null
+                echo "api published to catalog"
+              fi
+
               # ponytail: sleep 6 for gateway sync (5s interval), remove if polling gateway sync endpoint
               sleep 6
 

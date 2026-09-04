@@ -21,7 +21,7 @@ initJob: {enabled: true, apiKeys: 3} # requires httpbun.enabled=true
 IdP: configure via `gravitee.oidcAuth` (clientId, tokenEndpoint, authorizeEndpoint etc). Disabled by default (`enabled:false`); wire via env when IdP is ready. See `values.yaml` `gravitee.oidcAuth` comments. POC ref: `management-api/gravitee.yml:549-565`.
 
 ## Init behaviour
-Post-install hook `templates/init-job.yaml` (like `setup-api.sh` but API_KEY not KEY_LESS). Guarded by `httpbun.enabled && initJob.enabled` — disable both together. Idempotent: reuses API/plan/app if exists, publishes plan (`validation: AUTO` so no admin approval), starts API, waits 6s for gateway sync. Creates 3 apps/subs (`app-1..app-N`, `initJob.apiKeys=3`) via Portal API with `AUTO` validation — no admin needed; fetch keys via Portal `GET /environments/DEFAULT/subscriptions?application={appId}` (or Management API equivalent).
+Post-install hook `templates/init-job.yaml` (like `setup-api.sh` but API_KEY not KEY_LESS). Guarded by `httpbun.enabled && initJob.enabled` — disable both together. Idempotent: reuses API/plan/app if exists, publishes plan (`validation: AUTO` so no admin approval), starts API, publishes it to the catalog (`lifecycleState: PUBLISHED` + `visibility: PUBLIC` via full-body v2 PUT — otherwise the portal catalog shows nothing), waits 6s for gateway sync. Creates 3 apps/subs (`app-1..app-N`, `initJob.apiKeys=3`) via Portal API with `AUTO` validation — no admin needed; fetch keys via Portal `GET /environments/DEFAULT/subscriptions?application={appId}` (or Management API equivalent).
 
 Unauthorized `curl http://gateway/httpbun/get` -> `401` from gateway, never hits httpbun.
 
@@ -45,10 +45,33 @@ curl -Lo /tmp/kind https://kind.sigs.k8s.io/dl/v0.28.0/kind-linux-amd64 && chmod
 kind create cluster --name gravitee-test
 kubectl cluster-info --context kind-gravitee-test
 
+# ingress-nginx (single-host path routing; controller must listen on 8080 so
+# MAPI-built absolute links carry :8080 — see "Ingress setup" below)
+kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/main/deploy/static/provider/kind/deploy.yaml
+kubectl patch deploy ingress-nginx-controller -n ingress-nginx --type json \
+  -p '[{"op":"add","path":"/spec/template/spec/containers/0/args/-","value":"--http-port=8080"}]'
+kubectl patch svc ingress-nginx-controller -n ingress-nginx --type json \
+  -p '[{"op":"replace","path":"/spec/ports/0/targetPort","value":8080}]'
+
 # deploy (fixed release `gravitee-test`, or just run ./deploy.sh): phase A hook off, rs.initiate, phase B hook on
 ./deploy.sh
 kubectl get pods -n vshn-api-gateway-gravitee-test
-kubectl get svc -n vshn-api-gateway-gravitee-test
+kubectl get ingress -n vshn-api-gateway-gravitee-test
+```
+
+### Ingress setup (single host, path routing)
+
+`values-local.yaml` enables all five ingresses on one host (`gravitee.local.test`,
+`ingressClassName: nginx`) — mirrors the prod single-host path layout. Longest-prefix
+match keeps them apart:
+
+| Path         | Service                        | What                          |
+|--------------|--------------------------------|-------------------------------|
+| `/`          | `gravitee-test-portal:8003`    | Developer portal UI (SPA)     |
+| `/portal`    | `gravitee-test-api:83`         | Portal REST API (MAPI)        |
+| `/management`| `gravitee-test-api:83`         | Management/Console API (MAPI) |
+| `/console`   | `gravitee-test-ui:8002`        | Console UI (prefix rewritten) |
+| `/httpbun`   | `gravitee-test-gateway:82`     | Gateway (httpbun demo API)    |
 
 # verify gateway (401 without key, 200 with key from initJob logs)
 kubectl port-forward -n vshn-api-gateway-gravitee-test svc/gravitee-test-gateway 9082:82 &
@@ -57,17 +80,25 @@ curl -H "X-Gravitee-Api-Key: <KEY>" http://localhost:9082/httpbun/get  # 200
 # <KEY> from: kubectl logs -n vshn-api-gateway-gravitee-test job/gravitee-test-init  OR  kubectl get secret my-gravitee-init-keys -n gravitee -o jsonpath='{.data}' | jq
 ```
 
-### Local baseURLs (kind port-forwards)
+Note: v1 `GET /management/user` (no org prefix) returns 500 `findById(null)` — dead v1
+route, UIs don't use it; don't use it in scripts. Use
+`/management/organizations/DEFAULT/user`.
 
-With all ingresses disabled the chart falls back to `https://apim.example.com`, which is
-unreachable from a browser. `values-local.yaml` pins reachable localhost URLs:
+### Verify through the ingress
 
-- `gravitee.ui.baseURL: http://localhost:8083/management` (console `constants.json`)
-- `gravitee.portal.baseURL: http://localhost:8083/portal` (portal `assets/config.json`)
-- `gravitee.installation.api.url: http://localhost:8083` (portal `/ui/bootstrap`; without it the portal UI ignores the ConfigMaps and calls `apim.example.com`)
+```sh
+B=http://gravitee.local.test:8080
+curl $B/                                  # 200 portal UI HTML
+curl -u admin:admin $B/management/organizations/DEFAULT/user   # 200
+curl $B/console                           # 200 console UI
+curl $B/httpbun/get                       # 401 without key
+curl -H "X-Gravitee-Api-Key: <KEY>" $B/httpbun/get             # 200 with key
+```
 
-Forward `8083:83` (api), `9082:82` (gateway), `8085:8003` (portal), `8084:8002` (console).
-`values.yaml` (prod) stays free of localhost.
+`<KEY>` via management API as admin: list subscriptions
+(`GET /management/v2/organizations/DEFAULT/environments/DEFAULT/apis` →
+`.../apis/{apiId}/subscriptions`), then
+`GET .../apis/{apiId}/subscriptions/{subId}/api-keys`.
 
 ### Secrets (kind test path)
 
@@ -85,14 +116,28 @@ enables it with replica set `mongodb-nunki` and `mongo.auth`, and
 `values.yaml` — the same fallback `deploy.sh` uses when the real
 `values.secret.yaml` is absent.
 
-### Portal 2-key demo (screenshots in `docs/screenshots/`)
+### Credentials (kind-local throwaways)
 
-`01-login.png`, `02-api-detail.png` (httpbun PoC API), `03-application.png` (demo-app-1),
-`04-subscription.png`, `05-key-1.png`, `06-key-2.png` (viewport 1280x800, `demo@example.com`).
-Demo subscriptions were closed after the shoot, so pictured keys now return 401; gateway
-proof during the shoot: no key 401, KEY1 200, KEY2 200.
+| Credential | Value | Provenance |
+|---|---|---|
+| Console admin | `admin` / `admin` | apim chart default memory provider (upstream `gravitee.yml` bcrypt default) |
+| Portal demo user | `demo-keys@example.com` / `Demo1234!` | registered via portal REST (`POST /portal/environments/DEFAULT/users/registration`), then BCrypt hash set via `mongosh` on `mongodb-0` (no SMTP in kind, so registration ignores the password) — recreated after every teardown |
+| Mongo root password | `values.secret.yaml` | git-ignored overlay; provisions root on FIRST boot via `MONGO_INITDB_ROOT_PASSWORD` |
+| API keys | (generated) | generated by Gravitee on subscription (API_KEY plan, `validation: AUTO`), fetched via management API as admin |
+
+### Portal demo walkthrough (screenshots in `docs/screenshots/`)
+
+Through the ingress (`gravitee.local.test:8080`), portal user `demo-keys@example.com`:
+`07-ingress-login.png` (portal home), `08-ingress-api-detail.png` (httpbun PoC API),
+`09-ingress-application.png` (`ingress-app-1`), `10-ingress-subscription.png`
+(subscription `Accepted`, plan AUTO), `11-ingress-key-1.png` (key revealed),
+`12-ingress-console.png` (console at `/console` as `admin`/`admin`). Earlier port-forward
+shots (`01`–`06`, `demo@example.com`) predate the ingress setup; their subscriptions were
+closed, pictured keys return 401. Gateway proof during the ingress shoot: no key 401,
+key 200 (through `/httpbun`).
+
 Note: the `httpbun PoC API` needs lifecycleState PUBLISHED + visibility PUBLIC to appear
-in the portal catalog (`PUT /management/v2/.../apis/{id}` with full body).
+in the portal catalog — the init job now does this (see "Init behaviour").
 
 ## Publishing
 Tag `v*` triggers `.github/workflows/helm-release.yml` -> `oci://ghcr.io/<owner>/helm-charts`.
