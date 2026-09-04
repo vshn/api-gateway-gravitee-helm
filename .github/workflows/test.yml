@@ -19,6 +19,10 @@ jobs:
       - env:
           NEWLINE: |2+
 
+          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}
+          ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
+
         name: Helm Chart preview
         run: |
           jq -n '.env=(env | with_entries(select(.key | startswith("KUBECONFIG_") | not)))' > ${PWD}/env.yaml
@@ -30,6 +34,10 @@ jobs:
 
       - env:
           NEWLINE: |2+
+
+          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}
+          ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
 
         name: Helm Chart deploy
         run: |

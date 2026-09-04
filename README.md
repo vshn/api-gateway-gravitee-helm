@@ -5,9 +5,10 @@ Wrapper around `https://helm.gravitee.io` `apim:4.12.18` for APPUiO/AppFlow. See
 ## What it wraps
 - `gravitee` (alias for `apim:4.12.18`): Management API, Gateway, Console UI, Portal. Bundled mongo/es disabled (`gravitee.mongodb.enabled=false`, `gravitee.elasticsearch.enabled=false`, `gravitee.es.enabled=false`).
 - Extra: `httpbun` Deployment+Service (toggle `httpbun.enabled`), `init` Job hook creating V4 proxy API `/httpbun` -> httpbun, API_KEY plan, 3 apps/subs.
+- `postgresql` (`templates/postgresql.yaml`, gated by `postgresql.enabled`, `true` everywhere): single-replica Deployment + PVC; Gravitee uses it as JDBC repository (`gravitee.management.type=jdbc`, `gravitee.ratelimit.type=jdbc`; PostgreSQL driver is bundled in the APIM images). Set `postgresql.enabled=false` and point `gravitee.jdbc.url/username/password` at an external database instead.
 
 ## Values
-All subchart values namespaced under `gravitee:` (alias). Wrapper-only: `httpbun`, `initJob`, `env`.
+All subchart values namespaced under `gravitee:` (alias). Wrapper-only: `httpbun`, `initJob`, `env`, `postgresql` (bundled DB; `true` in both `values.yaml` and `values-local.yaml`).
 
 ```yaml
 gravitee:
@@ -21,7 +22,7 @@ initJob: {enabled: true, apiKeys: 3} # requires httpbun.enabled=true
 IdP: configure via `gravitee.oidcAuth` (clientId, tokenEndpoint, authorizeEndpoint etc). Disabled by default (`enabled:false`); wire via env when IdP is ready. See `values.yaml` `gravitee.oidcAuth` comments. POC ref: `management-api/gravitee.yml:549-565`.
 
 ## Init behaviour
-Post-install hook `templates/init-job.yaml` (like `setup-api.sh` but API_KEY not KEY_LESS). Guarded by `httpbun.enabled && initJob.enabled` — disable both together. Idempotent: reuses API/plan/app if exists, publishes plan (`validation: AUTO` so no admin approval), starts API, publishes it to the catalog (`lifecycleState: PUBLISHED` + `visibility: PUBLIC` via full-body v2 PUT — otherwise the portal catalog shows nothing), waits 6s for gateway sync. Creates 3 apps/subs (`app-1..app-N`, `initJob.apiKeys=3`) via Portal API with `AUTO` validation — no admin needed; fetch keys via Portal `GET /environments/DEFAULT/subscriptions?application={appId}` (or Management API equivalent).
+Post-install hook `templates/init-job.yaml` (like `setup-api.sh` but API_KEY not KEY_LESS). Guarded by `httpbun.enabled && initJob.enabled` — disable both together. Idempotent: reuses API/plan/app if exists, publishes plan (`validation: AUTO` so no admin approval), starts API, waits 6s for gateway sync. Creates 3 apps/subs (`app-1..app-N`, `initJob.apiKeys=3`) via Portal API with `AUTO` validation — no admin needed; fetch keys via Portal `GET /environments/DEFAULT/subscriptions?application={appId}` (or Management API equivalent).
 
 Unauthorized `curl http://gateway/httpbun/get` -> `401` from gateway, never hits httpbun.
 
@@ -37,7 +38,7 @@ helm upgrade --install gravitee-test . --set httpbun.enabled=false --set initJob
 
 ## Local kind test
 
-Bundled Bitnami Mongo fails on kind (`mkdir: cannot create directory '/bitnami/mongodb': Permission denied`). `values-local.yaml` disables it (`gravitee.mongodb.enabled=false`, `gravitee.mongo.rsEnabled=false`) and expects external `gravitee-mongodb` Service (`mongo:6.0 --noauth`).
+Bundled postgres (`templates/postgresql.yaml`, `postgresql.enabled: true` in both `values.yaml` and `values-local.yaml`) provides a single replica; Gravitee's liquibase (`gravitee.jdbc.liquibase`, on by default) creates the schema on first Management API boot against the fresh DB. No manual init step needed — a single `helm upgrade --install` suffices (the init hook retries until the Management API is ready).
 
 ```sh
 # kind install + cluster
@@ -45,105 +46,64 @@ curl -Lo /tmp/kind https://kind.sigs.k8s.io/dl/v0.28.0/kind-linux-amd64 && chmod
 kind create cluster --name gravitee-test
 kubectl cluster-info --context kind-gravitee-test
 
-# ingress-nginx (single-host path routing; controller must listen on 8080 so
-# MAPI-built absolute links carry :8080 — see "Ingress setup" below)
-kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/main/deploy/static/provider/kind/deploy.yaml
-kubectl patch deploy ingress-nginx-controller -n ingress-nginx --type json \
-  -p '[{"op":"add","path":"/spec/template/spec/containers/0/args/-","value":"--http-port=8080"}]'
-kubectl patch svc ingress-nginx-controller -n ingress-nginx --type json \
-  -p '[{"op":"replace","path":"/spec/ports/0/targetPort","value":8080}]'
-
-# deploy (fixed release `gravitee-test`): --local adds values-local.yaml and runs
-# the two-phase flow (phase A hook off, rs.initiate, phase B hook on); --create-ns
-# lets helm create the namespace; --diff renders/diffs only
-./deploy.sh --local --create-ns   # kind
-./deploy.sh                       # APPUiO
-./deploy.sh --diff --local        # diff only, no cluster changes
-                                  # requires: helm plugin install https://github.com/databus23/helm-diff --verify=false
-                                  # exit 0 = no differences, exit 1 = differences found
+# deploy (fixed release `gravitee-test`, or just run ./deploy.sh; layers values.yaml + values-local.yaml + secret)
+./deploy.sh
 kubectl get pods -n vshn-api-gateway-gravitee-test
-kubectl get ingress -n vshn-api-gateway-gravitee-test
-```
+kubectl get svc -n vshn-api-gateway-gravitee-test
 
-### Ingress setup (single host, path routing)
-
-`values-local.yaml` enables all five ingresses on one host (`gravitee.local.test`,
-`ingressClassName: nginx`) — mirrors the prod single-host path layout. Longest-prefix
-match keeps them apart:
-
-| Path         | Service                        | What                          |
-|--------------|--------------------------------|-------------------------------|
-| `/`          | `gravitee-test-portal:8003`    | Developer portal UI (SPA)     |
-| `/portal`    | `gravitee-test-api:83`         | Portal REST API (MAPI)        |
-| `/management`| `gravitee-test-api:83`         | Management/Console API (MAPI) |
-| `/console`   | `gravitee-test-ui:8002`        | Console UI (prefix rewritten) |
-| `/httpbun`   | `gravitee-test-gateway:82`     | Gateway (httpbun demo API)    |
-
-# verify gateway (401 without key, 200 with key from initJob logs)
+# verify gateway (401 without key, 200 with key)
 kubectl port-forward -n vshn-api-gateway-gravitee-test svc/gravitee-test-gateway 9082:82 &
 curl -s http://localhost:9082/httpbun/get  # 401
 curl -H "X-Gravitee-Api-Key: <KEY>" http://localhost:9082/httpbun/get  # 200
-# <KEY> from: kubectl logs -n vshn-api-gateway-gravitee-test job/gravitee-test-init  OR  kubectl get secret my-gravitee-init-keys -n gravitee -o jsonpath='{.data}' | jq
+# <KEY>: plaintext in postgres `keys` table
+# (kubectl exec deploy/gravitee-test-postgresql -- psql -U gravitee -d gravitee -tAc "select key from keys limit 1")
+# or via Portal API as admin (`GET /environments/DEFAULT/applications`, then `/subscriptions?application={appId}`)
 ```
 
-Note: v1 `GET /management/user` (no org prefix) returns 500 `findById(null)` — dead v1
-route, UIs don't use it; don't use it in scripts. Use
-`/management/organizations/DEFAULT/user`.
+### Local baseURLs (kind port-forwards)
 
-### Verify through the ingress
+With all ingresses disabled the chart falls back to `https://apim.example.com`, which is
+unreachable from a browser. `values-local.yaml` pins reachable localhost URLs:
 
-```sh
-B=http://gravitee.local.test:8080
-curl $B/                                  # 200 portal UI HTML
-curl -u admin:admin $B/management/organizations/DEFAULT/user   # 200
-curl $B/console                           # 200 console UI
-curl $B/httpbun/get                       # 401 without key
-curl -H "X-Gravitee-Api-Key: <KEY>" $B/httpbun/get             # 200 with key
-```
+- `gravitee.ui.baseURL: http://localhost:8083/management` (console `constants.json`)
+- `gravitee.portal.baseURL: http://localhost:8083/portal` (portal `assets/config.json`)
+- `gravitee.installation.api.url: http://localhost:8083` (portal `/ui/bootstrap`; without it the portal UI ignores the ConfigMaps and calls `apim.example.com`)
 
-`<KEY>` via management API as admin: list subscriptions
-(`GET /management/v2/organizations/DEFAULT/environments/DEFAULT/apis` →
-`.../apis/{apiId}/subscriptions`), then
-`GET .../apis/{apiId}/subscriptions/{subId}/api-keys`.
+Forward `8083:83` (api), `9082:82` (gateway), `8085:8003` (portal), `8084:8002` (console).
+`values.yaml` (prod) stays free of localhost.
 
-### Secrets (kind test path)
+### Secrets (env map + kubernetes:// URIs)
 
-Mongo credentials are not committed: `deploy.sh` loads `values.secret.yaml`
-(git-ignored, create it from `values.secret.example.yaml`) and falls back to
-the example when the real file is absent. It feeds three keys:
+All secret values come from the single `env` values map: the wrapper renders
+every key into a `<release>-env` Secret (`templates/env-secret.yaml`), and
+Gravitee reads what it needs at boot via
+`kubernetes://<ns>/secrets/<release>-env/<KEY>` URIs in gravitee.yml (see the
+upstream helm chart README, "Configuration"). The chart's managed service
+account (`apim.managedServiceAccount`) already grants secrets get/list, so no
+secret is ever rendered in plaintext into a ConfigMap. Required keys (guarded
+at render time): `POSTGRES_PASSWORD` (bundled postgres + jdbc; only applied on
+first boot — rotate via PVC wipe or `ALTER USER`), `JWT_SECRET` (session
+signing; the chart default is public), `ADMIN_PASSWORD` (console admin login).
 
-- `mongodb.env.MONGODB_ROOT_PASSWORD` — rendered into the `mongodb-env` Secret by the vendored chart. The StatefulSet `envFrom`s that Secret; on first boot the mongo entrypoint uses `MONGO_INITDB_ROOT_PASSWORD` (the chart sets it to the same value) to provision the `root` user with it.
-- `MONGODB_REPLICA_SET_KEY` — internal auth between replica-set members (`--keyFile`).
-- `gravitee.mongo.auth.password` — how Gravitee learns the password: the upstream apim chart renders it **in plaintext** into the `gravitee.yml` ConfigMap. There is no Secret bridge on the Gravitee side, so both sides just carry the same literal value (`gravitee-kind-root` in the example); change it in both places together.
+No default-credential users: the memory provider has a single `admin` user
+whose password comes from `env.ADMIN_PASSWORD` (`password-encoding-algo:
+none`), and the chart-default demo users (`user`, `api1`, `application1`) are
+dropped (`gravitee.extraInMemoryUsers: ""`). The init job authenticates with
+the same secret (no admin/admin fallback).
 
-The CI/test path uses the same authenticated vendored mongo: `values.yaml`
-enables it with replica set `mongodb-nunki` and `mongo.auth`, and
-`.github/workflows/test.yml` layers `values.secret.example.yaml` on top of
-`values.yaml` — the same fallback `deploy.sh` uses when the real
-`values.secret.yaml` is absent.
+`deploy.sh` loads `values.secret.yaml` (git-ignored, create it from
+`values.secret.example.yaml`) and falls back to the example when the real file
+is absent. The CI path (`.github/workflows/test.yml`) maps the
+`POSTGRES_PASSWORD` / `JWT_SECRET` / `ADMIN_PASSWORD` GitHub secrets into the
+step environment, which lands in `.Values.env` the same way.
 
-### Credentials (kind-local throwaways)
+### Console demo (screenshots in `docs/screenshots/`)
 
-| Credential | Value | Provenance |
-|---|---|---|
-| Console admin | `admin` / `admin` | apim chart default memory provider (upstream `gravitee.yml` bcrypt default) |
-| Portal demo user | `demo-keys@example.com` / `Demo1234!` | registered via portal REST (`POST /portal/environments/DEFAULT/users/registration`), then BCrypt hash set via `mongosh` on `mongodb-0` (no SMTP in kind, so registration ignores the password) — recreated after every teardown |
-| Mongo root password | `values.secret.yaml` | git-ignored overlay; provisions root on FIRST boot via `MONGO_INITDB_ROOT_PASSWORD` |
-| API keys | (generated) | generated by Gravitee on subscription (API_KEY plan, `validation: AUTO`), fetched via management API as admin |
-
-### Portal demo walkthrough (screenshots in `docs/screenshots/`)
-
-Through the ingress (`gravitee.local.test:8080`), portal user `demo-keys@example.com`:
-`07-ingress-login.png` (portal home), `08-ingress-api-detail.png` (httpbun PoC API),
-`09-ingress-application.png` (`ingress-app-1`), `10-ingress-subscription.png`
-(subscription `Accepted`, plan AUTO), `11-ingress-key-1.png` (key revealed),
-`12-ingress-console.png` (console at `/console` as `admin`/`admin`). Earlier port-forward
-shots (`01`–`06`, `demo@example.com`) predate the ingress setup; their subscriptions were
-closed, pictured keys return 401. Gateway proof during the ingress shoot: no key 401,
-key 200 (through `/httpbun`).
-
-Note: the `httpbun PoC API` needs lifecycleState PUBLISHED + visibility PUBLIC to appear
-in the portal catalog — the init job now does this (see "Init behaviour").
+`01-login.png`, `02-api-detail.png` (httpbun PoC API), `03-application.png` (app-1),
+`04-subscription.png`, `05-key-1.png` (app-1 key), `06-key-2.png` (app-2 key)
+(viewport 1280x800, login `admin` + `env.ADMIN_PASSWORD`). Shot on the postgres/JDBC
+stack with env-based secrets; gateway proof during the shoot: no key 401, key-1 200,
+key-2 200, bad key 401.
 
 ## Publishing
 Tag `v*` triggers `.github/workflows/helm-release.yml` -> `oci://ghcr.io/<owner>/helm-charts`.
@@ -152,7 +112,7 @@ Tag `v*` triggers `.github/workflows/helm-release.yml` -> `oci://ghcr.io/<owner>
 If adding `VSHNPostgreSQL`/`VSHNMongoDB` AppCat resource later (like `litellm/templates/vshnpostgresql.yaml`), apply CR before first Helm install — Helm installs deps before wrapper manifests.
 
 ## Ponytail
-Kept 3 templates + 1 job. Skipped: custom gravitee.yml mount (use `gravitee.api.configuration`), extra Secrets/PDBs. Add when measured.
+Kept 4 templates + 1 job. Skipped: custom gravitee.yml mount (use `gravitee.api.configuration`), extra Secrets/PDBs, HA postgres. Add when measured.
 
 ## Deploy to test (CI)
 Every push runs `.github/workflows/test.yml` (`environment: test`): `helm diff`
@@ -164,5 +124,5 @@ release reset). Requires the `KUBECONFIG_TEST` secret on the `test` environment.
 
 ## Kind
 Local kind users run `./deploy.sh` (fixed release `gravitee-test`, namespace
-`vshn-api-gateway-gravitee-test`): phase A installs with the init hook off, initiates the mongo
-replica set, phase B upgrades with the hook on, then shows pods/svc + init log.
+`vshn-api-gateway-gravitee-test`): single `helm upgrade --install` (bundled
+postgres needs no manual first-boot step), then shows pods/svc + init log.

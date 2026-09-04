@@ -26,17 +26,13 @@ spec:
             - name: ADMIN_PASS
               valueFrom:
                 secretKeyRef:
-                  name: {{ .Release.Name }}-api-admin
-                  key: password
-                  optional: true
-            # fallback if secret not present (default gravitee admin/admin)
-            - name: ADMIN_PASS_FALLBACK
-              value: admin
+                  name: {{ .Release.Name }}-env
+                  key: ADMIN_PASSWORD
           command: ["/bin/sh", "-c"]
           args:
             - |
               # ponytail: naive retry + idempotent; upgrade path: operator if init grows
-              PASS="${ADMIN_PASS:-$ADMIN_PASS_FALLBACK}"
+              PASS="${ADMIN_PASS}"
               ENVS="organizations/DEFAULT/environments/DEFAULT"
               MAPI_URL="${MAPI}"
               PAPI_URL="${PAPI}"
@@ -44,8 +40,6 @@ spec:
               echo "waiting for management API..."
               for i in $(seq 1 60); do
                 if curl -sf -u "$ADMIN_USER:$PASS" "${MAPI_URL}/v2/${ENVS}/apis" >/dev/null 2>&1; then echo "mapi ready"; break; fi
-                # try fallback admin/admin if secret auth failed
-                if curl -sf -u admin:admin "${MAPI_URL}/v2/${ENVS}/apis" >/dev/null 2>&1; then ADMIN_USER=admin; PASS=admin; echo "mapi ready (fallback)"; break; fi
                 echo "retry $i"; sleep 5
               done
               curl -sf -u "$ADMIN_USER:$PASS" "${MAPI_URL}/v2/${ENVS}/apis" >/dev/null || { echo "mapi not ready"; exit 1; }

@@ -8,7 +8,7 @@ metadata:
     app.kubernetes.io/instance: {{ .Release.Name }}
 stringData:
   POSTGRES_USER: {{ .Values.postgresql.user | quote }}
-  POSTGRES_PASSWORD: {{ required "postgresql.password is required when postgresql.enabled=true (see values.secret.example.yaml)" .Values.postgresql.password | quote }}
+  POSTGRES_PASSWORD: {{ required ".Values.env.POSTGRES_PASSWORD is required when postgresql.enabled=true (see values.secret.example.yaml)" (index .Values.env "POSTGRES_PASSWORD") | quote }}
   POSTGRES_DB: {{ .Values.postgresql.database | quote }}
 ---
 apiVersion: v1

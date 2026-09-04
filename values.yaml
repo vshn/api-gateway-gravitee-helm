@@ -120,7 +120,9 @@ gravitee:
     #   - condition: "{#jsonPath(#profile, '$.email') == 'dev@example.com'}"
     #     roles: [ORGANIZATION:ADMIN, ENVIRONMENT:ADMIN]
 
-  # -- JDBC repositories (password in values.secret.yaml, see values.secret.example.yaml)
+  # -- JDBC repositories. All secret values come from .Values.env: the wrapper renders
+  #    them into a <release>-env Secret and Gravitee resolves kubernetes:// URIs at boot
+  #    (RBAC: the chart's managed service account has secrets get/list).
   management:
     type: jdbc
   ratelimit:
@@ -128,11 +130,25 @@ gravitee:
   jdbc:
     url: jdbc:postgresql://gravitee-test-postgresql:5432/gravitee
     username: gravitee
+    password: kubernetes://vshn-api-gateway-gravitee-test/secrets/gravitee-test-env/POSTGRES_PASSWORD
     # PostgreSQL driver is bundled in the APIM images (jdbc.driverSource=auto)
 
+  # -- single admin user, password from .Values.env.ADMIN_PASSWORD via secret URI
+  #    (password-encoding-algo none = raw compare; no default admin/admin, no demo users)
+  inMemoryAuth:
+    enabled: true
+    passwordEncodingAlgo: none
+  adminAccountEnable: true
+  adminPasswordBcrypt: kubernetes://vshn-api-gateway-gravitee-test/secrets/gravitee-test-env/ADMIN_PASSWORD
+  # -- drop the chart-default demo users (user/api1/application1 with default passwords)
+  extraInMemoryUsers: ""
+  # -- chart default jwtSecret is public ("myJWT4Gr4v1t33_S3cr3t") — always override
+  jwtSecret: kubernetes://vshn-api-gateway-gravitee-test/secrets/gravitee-test-env/JWT_SECRET
+
 # -- wrapper-only
-# -- bundled single-replica postgres (password in values.secret.yaml, see values.secret.example.yaml)
-#    external DB later: postgresql.enabled=false + point gravitee.jdbc.url/username/password at it
+# -- bundled single-replica postgres (password from .Values.env.POSTGRES_PASSWORD)
+#    external DB later: postgresql.enabled=false + point gravitee.jdbc.url/username at it
+#    (password then comes from whatever secret the external DB stack manages)
 postgresql:
   enabled: true
   user: gravitee
