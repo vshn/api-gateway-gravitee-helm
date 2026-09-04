@@ -63,8 +63,6 @@ spec:
         app.kubernetes.io/name: postgresql
         app.kubernetes.io/instance: {{ .Release.Name }}
     spec:
-      securityContext:
-        fsGroup: 999
       containers:
         - name: postgresql
           image: "{{ .Values.postgresql.image.repository }}:{{ .Values.postgresql.image.tag }}"
