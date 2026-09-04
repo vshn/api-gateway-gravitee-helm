@@ -3,4 +3,4 @@ dependencies:
   repository: https://helm.gravitee.io
   version: 4.12.18
 digest: sha256:a95f2d44b39e35aa8b12696f0d59d823ac5b31bd0be1e25526d1f3d2617c68b1
-generated: "2026-09-02T13:26:07.556249599Z"
+generated: "2026-09-04T06:26:25.765024922Z"

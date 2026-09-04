@@ -72,7 +72,12 @@ gravitee:
           secretName: tls-secret-gateway
       annotations:
         cert-manager.io/cluster-issuer: letsencrypt-production
-        haproxy.router.openshift.io/timeout: 2m
+        # OpenShift router: 0/disabled is NOT valid — the annotation silently stops
+        # matching and the route falls back to the router default 30s. 1d is the
+        # practical max. timeout = server (plain HTTP), timeout-tunnel = upgraded
+        # connections (SSE, websocket).
+        haproxy.router.openshift.io/timeout: 1d
+        haproxy.router.openshift.io/timeout-tunnel: 1d
     deployment:
       securityContext:
         runAsUser: null
@@ -226,6 +231,14 @@ initJob:
     pullPolicy: IfNotPresent
   # 3 API keys covering all upstreams; unauthorized never hits upstream (API_KEY plan)
   apiKeys: 3
+
+# -- opt-in: init job also creates LITELLM_API (context path /litellm -> env.LITELLM_URL).
+#    Clients authenticate with the same Bearer-format API key as httpbun; a
+#    transform-headers flow replaces the upstream Authorization header with
+#    "Bearer <env.LITELLM_API_KEY>" (the static client key never reaches the
+#    upstream, the upstream key never reaches the client). Requires
+#    env.LITELLM_URL + env.LITELLM_API_KEY (render-time guard) and initJob+httpbun.
+litellm_api_enabled: true
 
 # -- generic env -> Secret bridge (like litellm env: {})
 env: {}

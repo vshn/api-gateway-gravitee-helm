@@ -4,7 +4,7 @@ Wrapper around `https://helm.gravitee.io` `apim:4.12.18` for APPUiO/AppFlow. See
 
 ## What it wraps
 - `gravitee` (alias for `apim:4.12.18`): Management API, Gateway, Console UI, Portal. Bundled mongo/es disabled (`gravitee.mongodb.enabled=false`, `gravitee.elasticsearch.enabled=false`, `gravitee.es.enabled=false`).
-- Extra: `httpbun` Deployment+Service (toggle `httpbun.enabled`), `init` Job hook creating V4 proxy API `/httpbun` -> httpbun, API_KEY plan, 3 apps/subs.
+- Extra: `httpbun` Deployment+Service (toggle `httpbun.enabled`), `init` Job hook creating V4 proxy APIs: `/httpbun` -> httpbun and, when `litellm_api_enabled`, `LITELLM_API` `/litellm` -> `env.LITELLM_URL`; Bearer-format API_KEY plans; 3 apps/subs.
 - `postgresql` (`templates/postgresql.yaml`, gated by `postgresql.enabled`, `true` everywhere): single-replica Deployment + PVC; Gravitee uses it as JDBC repository (`gravitee.management.type=jdbc`, `gravitee.ratelimit.type=jdbc`; PostgreSQL driver is bundled in the APIM images). Set `postgresql.enabled=false` and point `gravitee.jdbc.url/username/password` at an external database instead.
 
 ## Values
@@ -17,12 +17,15 @@ gravitee:
   oidcAuth: {enabled: false} # set when IdP ready; maps to api env OIDC
 httpbun: {enabled: true}
 initJob: {enabled: true, apiKeys: 3} # requires httpbun.enabled=true
+litellm_api_enabled: true # also creates LITELLM_API (/litellm -> env.LITELLM_URL); needs env.LITELLM_URL + env.LITELLM_API_KEY
 ```
+
+Gateway route timeouts are `1d` + `timeout-tunnel: 1d` (0/invalid values silently fall back to the 30s router default; `1d` is the practical max).
 
 IdP: configure via `gravitee.oidcAuth` (clientId, tokenEndpoint, authorizeEndpoint etc). Disabled by default (`enabled:false`); wire via env when IdP is ready. See `values.yaml` `gravitee.oidcAuth` comments. POC ref: `management-api/gravitee.yml:549-565`.
 
 ## Init behaviour
-Post-install hook `templates/init-job.yaml` (like `setup-api.sh` but API_KEY not KEY_LESS). Guarded by `httpbun.enabled && initJob.enabled` — disable both together. Idempotent: reuses API/plan/app if exists, publishes plan (`validation: AUTO` so no admin approval), starts API, waits 6s for gateway sync. Creates 3 apps/subs (`app-1..app-N`, `initJob.apiKeys=3`) via Portal API with `AUTO` validation — no admin needed; fetch keys via Portal `GET /environments/DEFAULT/subscriptions?application={appId}` (or Management API equivalent).
+Post-install hook `templates/init-job.yaml` (like `setup-api.sh` but API_KEY not KEY_LESS). Guarded by `httpbun.enabled && initJob.enabled` — disable both together. Idempotent: reuses API/plan/app if exists, publishes plan (`validation: AUTO` so no admin approval), starts API, waits 6s for gateway sync. Plans are API_KEY with source BEARER — clients send `Authorization: Bearer <key>`, `X-Gravitee-Api-Key` no longer accepted; existing HEADER-mode plans migrated (full-body PUT) and the API held stopped across one gateway sync tick before restart (the gateway neither redeploys on plan-only changes nor notices a same-second stop/start). Creates 3 apps/subs (`app-1..app-N`, `initJob.apiKeys=3`) via Portal API with `AUTO` validation — no admin needed; the 3 apps subscribe to every managed plan; fetch keys via Portal `GET /environments/DEFAULT/subscriptions?application={appId}` (or Management API equivalent). LITELLM_API's transform-headers REQUEST flow replaces the upstream Authorization with `Bearer $LITELLM_API_KEY` — plan security consumes the client key first, the upstream key never reaches clients; an existing (e.g. console-created) LITELLM_API is reused but its transform-headers flow is self-healed to inject the real upstream key if it carries a placeholder or is missing.
 
 Unauthorized `curl http://gateway/httpbun/get` -> `401` from gateway, never hits httpbun.
 
@@ -56,7 +59,7 @@ kubectl get svc -n vshn-api-gateway-gravitee-test
 # verify gateway (401 without key, 200 with key)
 kubectl port-forward -n vshn-api-gateway-gravitee-test svc/gravitee-test-gateway 9082:82 &
 curl -s http://localhost:9082/httpbun/get  # 401
-curl -H "X-Gravitee-Api-Key: <KEY>" http://localhost:9082/httpbun/get  # 200
+curl -H "Authorization: Bearer <KEY>" http://localhost:9082/httpbun/get  # 200
 # <KEY>: plaintext in postgres `keys` table
 # (kubectl exec deploy/gravitee-test-postgresql -- psql -U gravitee -d gravitee -tAc "select key from keys limit 1")
 # or via Portal API as admin (`GET /environments/DEFAULT/applications`, then `/subscriptions?application={appId}`)
@@ -86,7 +89,9 @@ account (`apim.managedServiceAccount`) already grants secrets get/list, so no
 secret is ever rendered in plaintext into a ConfigMap. Required keys (guarded
 at render time): `POSTGRES_PASSWORD` (bundled postgres + jdbc; only applied on
 first boot — rotate via PVC wipe or `ALTER USER`), `JWT_SECRET` (session
-signing; the chart default is public), `ADMIN_PASSWORD` (console admin login).
+signing; the chart default is public), `ADMIN_PASSWORD` (console admin login),
+`LITELLM_URL` / `LITELLM_API_KEY` (required only when `litellm_api_enabled`;
+render-time guarded).
 
 No default-credential users: the memory provider has a single `admin` user
 whose password comes from `env.ADMIN_PASSWORD` (`password-encoding-algo:

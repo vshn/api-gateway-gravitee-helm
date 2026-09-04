@@ -28,6 +28,18 @@ spec:
                 secretKeyRef:
                   name: {{ .Release.Name }}-env
                   key: ADMIN_PASSWORD
+            {{- if .Values.litellm_api_enabled }}
+            - name: LITELLM_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Release.Name }}-env
+                  key: LITELLM_URL
+            - name: LITELLM_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Release.Name }}-env
+                  key: LITELLM_API_KEY
+            {{- end }}
           command: ["/bin/sh", "-c"]
           args:
             - |
@@ -69,7 +81,7 @@ spec:
               PLAN_ID=$(echo "$PLANS" | jq -r '.data[] | select(.name=="API Key") | .id' | head -1)
               if [ -z "$PLAN_ID" ] || [ "$PLAN_ID" = "null" ]; then
                 PLAN_ID=$(curl -sf -u "$ADMIN_USER:$PASS" -X POST -H 'Content-Type: application/json' "${MAPI_URL}/v2/${ENVS}/apis/${API_ID}/plans" -d '{
-                  "definitionVersion": "V4","name": "API Key","security": {"type": "API_KEY"},"mode": "STANDARD","validation": "AUTO"
+                  "definitionVersion": "V4","name": "API Key","security": {"type": "API_KEY","configuration": {"source": "BEARER"}},"mode": "STANDARD","validation": "AUTO"
                 }' | jq -r '.id')
                 echo "created plan $PLAN_ID"
                 curl -sf -u "$ADMIN_USER:$PASS" -X POST "${MAPI_URL}/v2/${ENVS}/apis/${API_ID}/plans/${PLAN_ID}/_publish" >/dev/null
@@ -80,6 +92,19 @@ spec:
                 STATUS=$(echo "$PLANS" | jq -r --arg id "$PLAN_ID" '.data[] | select(.id==$id) | .status')
                 if [ "$STATUS" != "PUBLISHED" ]; then
                   curl -sf -u "$ADMIN_USER:$PASS" -X POST "${MAPI_URL}/v2/${ENVS}/apis/${API_ID}/plans/${PLAN_ID}/_publish" >/dev/null || true
+                fi
+                # migrate pre-Bearer plan: PUT full body back with security flipped
+                SEC=$(echo "$PLANS" | jq -c --arg id "$PLAN_ID" '.data[] | select(.id==$id) | .security')
+                if ! echo "$SEC" | grep -q BEARER; then
+                  echo "$PLANS" | jq --arg id "$PLAN_ID" '[.data[] | select(.id==$id)] | .[0] | .security = {"type":"API_KEY","configuration":{"source":"BEARER"}}' > /tmp/plan-body.json
+                  curl -sf -u "$ADMIN_USER:$PASS" -X PUT -H 'Content-Type: application/json' "${MAPI_URL}/v2/${ENVS}/apis/${API_ID}/plans/${PLAN_ID}" -d @/tmp/plan-body.json >/dev/null
+                  # gateway does not redeploy on plan-only changes, and a same-second
+                  # _stop/_start is invisible to its 5s sync: hold stopped for one
+                  # tick (sleep 7) so undeploy+redeploy picks up the BEARER plan
+                  curl -sf -u "$ADMIN_USER:$PASS" -X POST "${MAPI_URL}/v2/${ENVS}/apis/${API_ID}/_stop" >/dev/null || true
+                  sleep 7
+                  curl -sf -u "$ADMIN_USER:$PASS" -X POST "${MAPI_URL}/v2/${ENVS}/apis/${API_ID}/_start" >/dev/null || true
+                  echo "plan migrated to BEARER source (api redeployed)"
                 fi
               fi
 
@@ -97,8 +122,122 @@ spec:
                 echo "api published to catalog"
               fi
 
+              {{- if .Values.litellm_api_enabled }}
+              # LITELLM_API: /litellm -> $LITELLM_URL; same Bearer plan; upstream
+              # Authorization replaced with "Bearer $LITELLM_API_KEY" by a
+              # REQUEST-phase transform-headers flow (plan security consumed the
+              # client key first; the upstream key is never returned to clients)
+              LAPI_NAME="LITELLM_API"
+              API_ID_LL=$(echo "$APIS" | jq -r --arg n "$LAPI_NAME" '.data[] | select(.name==$n) | .id' | head -1)
+              if [ -z "$API_ID_LL" ] || [ "$API_ID_LL" = "null" ]; then
+                echo "creating API $LAPI_NAME"
+                jq -n --arg target "$LITELLM_URL" --arg key "$LITELLM_API_KEY" '{
+                  name: "LITELLM_API",
+                  apiVersion: "1.0.0",
+                  definitionVersion: "V4",
+                  type: "PROXY",
+                  listeners: [{type: "HTTP", paths: [{path: "/litellm"}], entrypoints: [{type: "http-proxy"}]}],
+                  endpointGroups: [{name: "default-group", type: "http-proxy", endpoints: [
+                    {name: "default", type: "http-proxy", weight: 1, inheritConfiguration: false, configuration: {target: $target}}
+                  ]}],
+                  flows: [{
+                    name: "replace-authorization",
+                    enabled: true,
+                    request: [{
+                      name: "Transform Headers",
+                      description: "",
+                      enabled: true,
+                      policy: "transform-headers",
+                      configuration: {addHeaders: [{name: "Authorization", value: ("Bearer " + $key)}], scope: "REQUEST"}
+                    }]
+                  }]
+                }' > /tmp/litellm-api.json
+                API_ID_LL=$(curl -sf -u "$ADMIN_USER:$PASS" -X POST -H 'Content-Type: application/json' "${MAPI_URL}/v2/${ENVS}/apis" -d @/tmp/litellm-api.json | jq -r '.id')
+                echo "created $API_ID_LL"
+                STATE_LL=""
+              else
+                echo "api exists $API_ID_LL"
+                STATE_LL=$(echo "$APIS" | jq -r --arg id "$API_ID_LL" '.data[] | select(.id==$id) | .state')
+                # self-heal manually-created APIs: the transform-headers flow must
+                # inject the real upstream key (a console-created placeholder like
+                # "Bearer <token>" would otherwise survive the reuse above)
+                WANT_VAL="Bearer $LITELLM_API_KEY"
+                HAS_FLOW=$(curl -sf -u "$ADMIN_USER:$PASS" "${MAPI_URL}/v2/${ENVS}/apis/${API_ID_LL}" | jq --arg want "$WANT_VAL" '([.flows[]?.request[]? | select(.policy=="transform-headers") | .configuration.addHeaders[]? | select(.name=="Authorization" and .value==$want)] | length) > 0')
+                if [ "$HAS_FLOW" != "true" ]; then
+                  curl -sf -u "$ADMIN_USER:$PASS" "${MAPI_URL}/v2/${ENVS}/apis/${API_ID_LL}" | jq --arg key "$LITELLM_API_KEY" '.flows = [{
+                    name: "replace-authorization",
+                    enabled: true,
+                    request: [{
+                      name: "Transform Headers",
+                      description: "",
+                      enabled: true,
+                      policy: "transform-headers",
+                      configuration: {addHeaders: [{name: "Authorization", value: ("Bearer " + $key)}], scope: "REQUEST"}
+                    }]
+                  }]' > /tmp/litellm-api-body.json
+                  curl -sf -u "$ADMIN_USER:$PASS" -X PUT -H 'Content-Type: application/json' "${MAPI_URL}/v2/${ENVS}/apis/${API_ID_LL}" -d @/tmp/litellm-api-body.json >/dev/null
+                  # definition-only PUT emits no event: same sync blind spot as the
+                  # plan migration — hold stopped for one tick so the redeploy
+                  # picks up the healed flow
+                  curl -sf -u "$ADMIN_USER:$PASS" -X POST "${MAPI_URL}/v2/${ENVS}/apis/${API_ID_LL}/_stop" >/dev/null || true
+                  sleep 7
+                  curl -sf -u "$ADMIN_USER:$PASS" -X POST "${MAPI_URL}/v2/${ENVS}/apis/${API_ID_LL}/_start" >/dev/null || true
+                  echo "litellm flow fixed (placeholder/missing transform-headers replaced)"
+                fi
+              fi
+
+              PLANS_LL=$(curl -sf -u "$ADMIN_USER:$PASS" "${MAPI_URL}/v2/${ENVS}/apis/${API_ID_LL}/plans")
+              LITELLM_PLAN_ID=$(echo "$PLANS_LL" | jq -r '.data[] | select(.name=="API Key") | .id' | head -1)
+              if [ -z "$LITELLM_PLAN_ID" ] || [ "$LITELLM_PLAN_ID" = "null" ]; then
+                LITELLM_PLAN_ID=$(curl -sf -u "$ADMIN_USER:$PASS" -X POST -H 'Content-Type: application/json' "${MAPI_URL}/v2/${ENVS}/apis/${API_ID_LL}/plans" -d '{
+                  "definitionVersion": "V4","name": "API Key","security": {"type": "API_KEY","configuration": {"source": "BEARER"}},"mode": "STANDARD","validation": "AUTO"
+                }' | jq -r '.id')
+                echo "created litellm plan $LITELLM_PLAN_ID"
+                curl -sf -u "$ADMIN_USER:$PASS" -X POST "${MAPI_URL}/v2/${ENVS}/apis/${API_ID_LL}/plans/${LITELLM_PLAN_ID}/_publish" >/dev/null
+                echo "published litellm plan"
+              else
+                echo "litellm plan exists $LITELLM_PLAN_ID"
+                STATUS_LL=$(echo "$PLANS_LL" | jq -r --arg id "$LITELLM_PLAN_ID" '.data[] | select(.id==$id) | .status')
+                if [ "$STATUS_LL" != "PUBLISHED" ]; then
+                  curl -sf -u "$ADMIN_USER:$PASS" -X POST "${MAPI_URL}/v2/${ENVS}/apis/${API_ID_LL}/plans/${LITELLM_PLAN_ID}/_publish" >/dev/null || true
+                fi
+                SEC_LL=$(echo "$PLANS_LL" | jq -c --arg id "$LITELLM_PLAN_ID" '.data[] | select(.id==$id) | .security')
+                if ! echo "$SEC_LL" | grep -q BEARER; then
+                  echo "$PLANS_LL" | jq --arg id "$LITELLM_PLAN_ID" '[.data[] | select(.id==$id)] | .[0] | .security = {"type":"API_KEY","configuration":{"source":"BEARER"}}' > /tmp/plan-body.json
+                  curl -sf -u "$ADMIN_USER:$PASS" -X PUT -H 'Content-Type: application/json' "${MAPI_URL}/v2/${ENVS}/apis/${API_ID_LL}/plans/${LITELLM_PLAN_ID}" -d @/tmp/plan-body.json >/dev/null
+                  # gateway does not redeploy on plan-only changes, and a same-second
+                  # _stop/_start is invisible to its 5s sync: hold stopped for one
+                  # tick (sleep 7) so undeploy+redeploy picks up the BEARER plan
+                  curl -sf -u "$ADMIN_USER:$PASS" -X POST "${MAPI_URL}/v2/${ENVS}/apis/${API_ID_LL}/_stop" >/dev/null || true
+                  sleep 7
+                  curl -sf -u "$ADMIN_USER:$PASS" -X POST "${MAPI_URL}/v2/${ENVS}/apis/${API_ID_LL}/_start" >/dev/null || true
+                  echo "litellm plan migrated to BEARER source (api redeployed)"
+                fi
+              fi
+
+              if [ "${STATE_LL:-}" != "STARTED" ]; then
+                curl -sf -u "$ADMIN_USER:$PASS" -X POST "${MAPI_URL}/v2/${ENVS}/apis/${API_ID_LL}/_start" >/dev/null || true
+                echo "started litellm api"
+              fi
+
+              # catalog-visible: PUBLISHED + PUBLIC (v2 PUT needs the full body back)
+              API_BODY_LL=$(curl -sf -u "$ADMIN_USER:$PASS" "${MAPI_URL}/v2/${ENVS}/apis/${API_ID_LL}")
+              CUR_LL=$(echo "$API_BODY_LL" | jq -r '[.lifecycleState,.visibility] | join("/")')
+              if [ "$CUR_LL" != "PUBLISHED/PUBLIC" ]; then
+                echo "$API_BODY_LL" | jq 'if .lifecycleState == "CREATED" then .lifecycleState = "PUBLISHED" else . end | .visibility = "PUBLIC"' > /tmp/api-body.json
+                curl -sf -u "$ADMIN_USER:$PASS" -X PUT -H 'Content-Type: application/json' "${MAPI_URL}/v2/${ENVS}/apis/${API_ID_LL}" -d @/tmp/api-body.json >/dev/null
+                echo "litellm api published to catalog"
+              fi
+              {{- end }}
+
               # ponytail: sleep 6 for gateway sync (5s interval), remove if polling gateway sync endpoint
               sleep 6
+
+              # subscribe app-1..N to every managed plan (httpbun + litellm)
+              ALL_PLANS="$PLAN_ID"
+              {{- if .Values.litellm_api_enabled }}
+              ALL_PLANS="$ALL_PLANS $LITELLM_PLAN_ID"
+              {{- end }}
 
               # create N applications + subscriptions (3 keys covering all upstreams) via portal
               for i in $(seq 1 {{ .Values.initJob.apiKeys }}); do
@@ -113,14 +252,16 @@ spec:
                   echo "app exists $APP_NAME $APP_ID"
                 fi
                 # subscription via portal (filter by both app and plan, query param ignored by server so filter in jq)
-                SUBS=$(curl -sf -u "$ADMIN_USER:$PASS" "${PAPI_URL}/environments/DEFAULT/subscriptions?application=${APP_ID}" | jq -r --arg pid "$PLAN_ID" --arg aid "$APP_ID" '.data[] | select(.plan==$pid and .application==$aid) | .id' | head -1)
-                if [ -z "$SUBS" ] || [ "$SUBS" = "null" ]; then
-                  curl -sf -u "$ADMIN_USER:$PASS" -X POST -H 'Content-Type: application/json' "${PAPI_URL}/environments/DEFAULT/subscriptions" -d "{\"application\":\"$APP_ID\",\"plan\":\"$PLAN_ID\"}" >/dev/null
-                  echo "subscribed $APP_NAME to $PLAN_ID"
-                else
-                  echo "subscription exists $APP_NAME"
-                fi
+                for P in $ALL_PLANS; do
+                  SUBS=$(curl -sf -u "$ADMIN_USER:$PASS" "${PAPI_URL}/environments/DEFAULT/subscriptions?application=${APP_ID}" | jq -r --arg pid "$P" --arg aid "$APP_ID" '.data[] | select(.plan==$pid and .application==$aid) | .id' | head -1)
+                  if [ -z "$SUBS" ] || [ "$SUBS" = "null" ]; then
+                    curl -sf -u "$ADMIN_USER:$PASS" -X POST -H 'Content-Type: application/json' "${PAPI_URL}/environments/DEFAULT/subscriptions" -d "{\"application\":\"$APP_ID\",\"plan\":\"$P\"}" >/dev/null
+                    echo "subscribed $APP_NAME to $P"
+                  else
+                    echo "subscription exists $APP_NAME/$P"
+                  fi
+                done
               done
 
-              echo "init done — verify: curl -H \"X-Gravitee-Api-Key: <key>\" http://gateway/httpbun/get (401 without key, never hits httpbun)"
+              echo "init done — verify: curl -H \"Authorization: Bearer <key>\" http://gateway/httpbun/get (401 without key or with X-Gravitee-Api-Key; never hits upstream)"
 {{- end }}
