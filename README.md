@@ -53,8 +53,12 @@ kubectl patch deploy ingress-nginx-controller -n ingress-nginx --type json \
 kubectl patch svc ingress-nginx-controller -n ingress-nginx --type json \
   -p '[{"op":"replace","path":"/spec/ports/0/targetPort","value":8080}]'
 
-# deploy (fixed release `gravitee-test`, or just run ./deploy.sh): phase A hook off, rs.initiate, phase B hook on
-./deploy.sh
+# deploy (fixed release `gravitee-test`): --local adds values-local.yaml and runs
+# the two-phase flow (phase A hook off, rs.initiate, phase B hook on); --create-ns
+# lets helm create the namespace; --diff renders/diffs only
+./deploy.sh --local --create-ns   # kind
+./deploy.sh                       # APPUiO
+./deploy.sh --diff --local        # diff only, no cluster changes
 kubectl get pods -n vshn-api-gateway-gravitee-test
 kubectl get ingress -n vshn-api-gateway-gravitee-test
 ```
