@@ -4,6 +4,8 @@
 .DS_Store
 # Common VCS dirs
 .git/
+.github/
+.playwright-cli/
 .gitignore
 .bzr/
 .hg/
@@ -14,5 +16,7 @@
 # *.tgz at root is ignored via .gitignore, not .helmignore
 # Misc
 .github/
+docs/
 deploy*.sh
+*.md
 values.secret.yaml
