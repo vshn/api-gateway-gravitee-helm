@@ -17,6 +17,13 @@ gravitee:
       type: none
     # portal URL used in emails (chart template hardcodes https:// otherwise)
     portalURL: http://gravitee.local.test:8080/
+    # try-out commands: the chart's auto value from the gateway ingress loses the
+    # :8080 port and doubles the /httpbun path, and containerd drops dotted env names —
+    # PORTAL_ENTRYPOINT resolves to the same Spring property and is the effective
+    # override on kind
+    env:
+      - name: PORTAL_ENTRYPOINT
+        value: http://gravitee.local.test:8080
     deployment:
       securityContext:
         runAsUser: 1003120000
@@ -46,10 +53,12 @@ gravitee:
     standalone:
       console:
         urls:
-          - http://gravitee.local.test:8080/console
+          - orgId: DEFAULT
+            url: http://gravitee.local.test:8080/console
       portal:
         urls:
-          - http://gravitee.local.test:8080/
+          - envId: DEFAULT
+            url: http://gravitee.local.test:8080/
   gateway:
     reporters:
       elasticsearch:

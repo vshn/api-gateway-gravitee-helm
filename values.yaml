@@ -13,6 +13,8 @@ gravitee:
     replicaCount: 1
     analytics:
       type: none
+    # portal URL used in emails (chart default hardcodes https://<ui ingress host>)
+    portalURL: https://vshn-gravitee-management-test.apps.cloudscale-lpg-2.appuio.cloud/
     ingress:
       management:
         enabled: true
@@ -45,8 +47,13 @@ gravitee:
           drop: [ "ALL" ]
         seccompProfile:
           type: RuntimeDefault
-    # extra env for OIDC (toggle via oidcAuth below or raw env)
-    # env: []
+    # gateway URL for the UIs' try-out commands: overrides Gravitee's portal.entrypoint
+    # parameter (default https://api.company.com). PORTAL_ENTRYPOINT (underscore, valid
+    # env name) resolves to the same Spring property — containerd drops env names with
+    # dots, so the chart's auto portal.entrypoint env alone is not reliable.
+    env:
+      - name: PORTAL_ENTRYPOINT
+        value: https://vshn-gravitee-wrapper-test.apps.cloudscale-lpg-2.appuio.cloud/
 
   gateway:
     enabled: true
@@ -78,6 +85,8 @@ gravitee:
 
   ui:
     enabled: true
+    # console -> management API (matches api management ingress; chart auto-derives the same value)
+    baseURL: https://vshn-gravitee-api-test.apps.cloudscale-lpg-2.appuio.cloud/management
     ingress:
       enabled: true
       ingressClassName: openshift-default
@@ -106,6 +115,8 @@ gravitee:
 
   portal:
     enabled: true
+    # portal -> portal API (matches api portal ingress; chart auto-derives the same value)
+    baseURL: https://vshn-gravitee-api-test.apps.cloudscale-lpg-2.appuio.cloud/portal
     ingress:
       enabled: true
       ingressClassName: openshift-default
@@ -126,6 +137,23 @@ gravitee:
           drop: [ "ALL" ]
         seccompProfile:
           type: RuntimeDefault
+
+  # -- installation URLs: management API self-description, used by console/portal
+  #    bootstrap (/ui/bootstrap) and cross-UI links. Chart auto-derives these from
+  #    the ingresses when unset; pinned here explicitly for the 3-host split
+  #    (api / gateway / management hosts). console urls need orgId, portal urls envId.
+  installation:
+    api:
+      url: https://vshn-gravitee-api-test.apps.cloudscale-lpg-2.appuio.cloud
+    standalone:
+      console:
+        urls:
+          - orgId: DEFAULT
+            url: https://vshn-gravitee-management-test.apps.cloudscale-lpg-2.appuio.cloud/console
+      portal:
+        urls:
+          - envId: DEFAULT
+            url: https://vshn-gravitee-management-test.apps.cloudscale-lpg-2.appuio.cloud/
 
   # -- IdP (configurable, disabled by default — ponytail: wire via env or oidcAuth when needed)
   oidcAuth:

@@ -70,6 +70,7 @@ unreachable from a browser. `values-local.yaml` pins reachable localhost URLs:
 - `gravitee.ui.baseURL: http://localhost:8083/management` (console `constants.json`)
 - `gravitee.portal.baseURL: http://localhost:8083/portal` (portal `assets/config.json`)
 - `gravitee.installation.api.url: http://localhost:8083` (portal `/ui/bootstrap`; without it the portal UI ignores the ConfigMaps and calls `apim.example.com`)
+- `gravitee.api.env` pins `PORTAL_ENTRYPOINT` (resolves to Gravitee's `portal.entrypoint` — the gateway URL shown in try-out commands); the chart's auto value drops the `:8080` port and doubles the `/httpbun` path, and containerd drops env names containing dots
 
 Forward `8083:83` (api), `9082:82` (gateway), `8085:8003` (portal), `8084:8002` (console).
 `values.yaml` (prod) stays free of localhost.
