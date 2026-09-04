@@ -27,6 +27,8 @@ Post-install hook `templates/init-job.yaml` (like `setup-api.sh` but API_KEY not
 Unauthorized `curl http://gateway/httpbun/get` -> `401` from gateway, never hits httpbun.
 
 ## Deploy (APPUiO)
+
+One way to deploy this is that the api and the gateway and the uis (portal and console) are on 3 different hosts.
 Fixed release name `gravitee-test` (like litellm) so names are predictable (`gravitee-test-gateway`, `gravitee-test-init`, ...) in namespace `vshn-api-gateway-gravitee-test`.
 ```sh
 helm dependency update .

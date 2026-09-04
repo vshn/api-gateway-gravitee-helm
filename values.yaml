@@ -18,20 +18,22 @@ gravitee:
         enabled: true
         ingressClassName: openshift-default
         hosts:
-          - vshn-gravitee-wrapper-test.apps.cloudscale-lpg-2.appuio.cloud
+          - vshn-gravitee-api-test.apps.cloudscale-lpg-2.appuio.cloud
         tls:
           - hosts:
-              - vshn-gravitee-wrapper-test.apps.cloudscale-lpg-2.appuio.cloud
+              - vshn-gravitee-api-test.apps.cloudscale-lpg-2.appuio.cloud
+            secretName: tls-secret-api-management
         annotations:
           cert-manager.io/cluster-issuer: letsencrypt-production
       portal:
         enabled: true
         ingressClassName: openshift-default
         hosts:
-          - vshn-gravitee-wrapper-test.apps.cloudscale-lpg-2.appuio.cloud
+          - vshn-gravitee-api-test.apps.cloudscale-lpg-2.appuio.cloud
         tls:
           - hosts:
-              - vshn-gravitee-wrapper-test.apps.cloudscale-lpg-2.appuio.cloud
+              - vshn-gravitee-api-test.apps.cloudscale-lpg-2.appuio.cloud
+            secretName: tls-secret-api-portal
         annotations:
           cert-manager.io/cluster-issuer: letsencrypt-production
     deployment:
@@ -60,6 +62,7 @@ gravitee:
       tls:
         - hosts:
             - vshn-gravitee-wrapper-test.apps.cloudscale-lpg-2.appuio.cloud
+          secretName: tls-secret-gateway
       annotations:
         cert-manager.io/cluster-issuer: letsencrypt-production
         haproxy.router.openshift.io/timeout: 2m
@@ -81,10 +84,11 @@ gravitee:
       pathType: Prefix
       path: /console
       hosts:
-        - vshn-gravitee-wrapper-test.apps.cloudscale-lpg-2.appuio.cloud
+        - vshn-gravitee-management-test.apps.cloudscale-lpg-2.appuio.cloud
       tls:
         - hosts:
-            - vshn-gravitee-wrapper-test.apps.cloudscale-lpg-2.appuio.cloud
+            - vshn-gravitee-management-test.apps.cloudscale-lpg-2.appuio.cloud
+          secretName: tls-secret-ui
       annotations:
         cert-manager.io/cluster-issuer: letsencrypt-production
         # console serves at / but is exposed at /console: the OpenShift HAProxy router must
@@ -106,10 +110,11 @@ gravitee:
       enabled: true
       ingressClassName: openshift-default
       hosts:
-        - vshn-gravitee-wrapper-test.apps.cloudscale-lpg-2.appuio.cloud
+        - vshn-gravitee-management-test.apps.cloudscale-lpg-2.appuio.cloud
       tls:
         - hosts:
-            - vshn-gravitee-wrapper-test.apps.cloudscale-lpg-2.appuio.cloud
+            - vshn-gravitee-management-test.apps.cloudscale-lpg-2.appuio.cloud
+          secretName: tls-secret-portal
       annotations:
         cert-manager.io/cluster-issuer: letsencrypt-production
     deployment:
