@@ -9,7 +9,7 @@ usage() {
   cat <<EOF
 Usage: ./deploy.sh [flags]
   --local      add -f values-local.yaml and run the mongodb two-phase flow (kind)
-  --diff       render/diff only, no cluster changes
+  --diff       render/diff only, no cluster changes (requires helm-diff plugin)
   --create-ns  pass --create-namespace to helm (ns is provisioned by AppFlow on APPUiO)
   -h, --help   show this help
 
@@ -43,16 +43,16 @@ VALUES="$VALUES -f $SECRET"
 helm dependency update .
 
 if [ -n "$DIFF" ]; then
-  rc=0
-  if helm diff --help >/dev/null 2>&1; then
-    helm diff upgrade "$RELEASE" . -n "$NAMESPACE" $VALUES --allow-unreleased || rc=$?
-  else
-    helm template "$RELEASE" . -n "$NAMESPACE" $VALUES | kubectl diff -f - || rc=$?
+  if ! helm diff --help >/dev/null 2>&1; then
+    echo "helm-diff plugin required: helm plugin install https://github.com/databus23/helm-diff --verify=false" >&2
+    exit 1
   fi
+  rc=0
+  helm diff upgrade "$RELEASE" . -n "$NAMESPACE" $VALUES --allow-unreleased --detailed-exitcode || rc=$?
   case "$rc" in
     0) echo "No differences found."; exit 0 ;;
-    1|2) echo "Differences found."; exit 1 ;;
-    *) echo "Diff command failed (exit $rc)." >&2; exit "$rc" ;;
+    2) echo "Differences found."; exit 1 ;;
+    *) echo "Diff failed (exit $rc)." >&2; exit "$rc" ;;
   esac
 fi
 

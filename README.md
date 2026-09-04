@@ -59,6 +59,8 @@ kubectl patch svc ingress-nginx-controller -n ingress-nginx --type json \
 ./deploy.sh --local --create-ns   # kind
 ./deploy.sh                       # APPUiO
 ./deploy.sh --diff --local        # diff only, no cluster changes
+                                  # requires: helm plugin install https://github.com/databus23/helm-diff --verify=false
+                                  # exit 0 = no differences, exit 1 = differences found
 kubectl get pods -n vshn-api-gateway-gravitee-test
 kubectl get ingress -n vshn-api-gateway-gravitee-test
 ```
