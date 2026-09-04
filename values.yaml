@@ -19,6 +19,9 @@ gravitee:
         ingressClassName: openshift-default
         hosts:
           - vshn-gravitee-wrapper-test.apps.cloudscale-lpg-2.appuio.cloud
+        tls:
+          - hosts:
+              - vshn-gravitee-wrapper-test.apps.cloudscale-lpg-2.appuio.cloud
         annotations:
           cert-manager.io/cluster-issuer: letsencrypt-production
       portal:
@@ -26,6 +29,9 @@ gravitee:
         ingressClassName: openshift-default
         hosts:
           - vshn-gravitee-wrapper-test.apps.cloudscale-lpg-2.appuio.cloud
+        tls:
+          - hosts:
+              - vshn-gravitee-wrapper-test.apps.cloudscale-lpg-2.appuio.cloud
         annotations:
           cert-manager.io/cluster-issuer: letsencrypt-production
     deployment:
@@ -51,6 +57,9 @@ gravitee:
       ingressClassName: openshift-default
       hosts:
         - vshn-gravitee-wrapper-test.apps.cloudscale-lpg-2.appuio.cloud
+      tls:
+        - hosts:
+            - vshn-gravitee-wrapper-test.apps.cloudscale-lpg-2.appuio.cloud
       annotations:
         cert-manager.io/cluster-issuer: letsencrypt-production
         haproxy.router.openshift.io/timeout: 2m
@@ -73,6 +82,9 @@ gravitee:
       path: /console
       hosts:
         - vshn-gravitee-wrapper-test.apps.cloudscale-lpg-2.appuio.cloud
+      tls:
+        - hosts:
+            - vshn-gravitee-wrapper-test.apps.cloudscale-lpg-2.appuio.cloud
       annotations:
         cert-manager.io/cluster-issuer: letsencrypt-production
     deployment:
@@ -92,6 +104,9 @@ gravitee:
       ingressClassName: openshift-default
       hosts:
         - vshn-gravitee-wrapper-test.apps.cloudscale-lpg-2.appuio.cloud
+      tls:
+        - hosts:
+            - vshn-gravitee-wrapper-test.apps.cloudscale-lpg-2.appuio.cloud
       annotations:
         cert-manager.io/cluster-issuer: letsencrypt-production
     deployment:
