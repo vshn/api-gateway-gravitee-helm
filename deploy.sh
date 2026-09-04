@@ -56,16 +56,8 @@ if [ -n "$DIFF" ]; then
   esac
 fi
 
-if [ -n "$LOCAL" ]; then
-  MONGO_PASS=$(awk '/MONGODB_ROOT_PASSWORD:/{sub(/^[^:]*:[ \t]*/,""); gsub(/["'\'']/, ""); sub(/[ \t\r]+$/, ""); print; exit}' "$SECRET")
-  : "${MONGO_PASS:?no MONGODB_ROOT_PASSWORD found in $SECRET}"
-  helm upgrade --install "$RELEASE" . -n "$NAMESPACE" $VALUES --set initJob.enabled=false --timeout 10m $CREATE_NS
-  kubectl wait pod/mongodb-0 -n "$NAMESPACE" --for=condition=Ready --timeout=300s
-  kubectl exec -n "$NAMESPACE" mongodb-0 -- mongosh -u root -p "$MONGO_PASS" --authenticationDatabase admin --quiet --eval "rs.initiate({_id:\"mongodb-nunki\",version:1,members:[{_id:0,host:\"mongodb-0.${NAMESPACE}.svc.cluster.local:27017\"}]})" || true
-  helm upgrade "$RELEASE" . -n "$NAMESPACE" $VALUES --timeout 10m $CREATE_NS
-else
-  helm upgrade --install "$RELEASE" . -n "$NAMESPACE" $VALUES --timeout 10m $CREATE_NS
-fi
+# postgres stack: no DB init phase needed (bundled postgres self-starts; gravitee retries until ready)
+helm upgrade --install "$RELEASE" . -n "$NAMESPACE" $VALUES --timeout 10m $CREATE_NS
 
 kubectl get pods -n "$NAMESPACE"
 kubectl get svc -n "$NAMESPACE"
