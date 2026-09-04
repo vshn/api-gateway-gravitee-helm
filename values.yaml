@@ -87,6 +87,9 @@ gravitee:
             - vshn-gravitee-wrapper-test.apps.cloudscale-lpg-2.appuio.cloud
       annotations:
         cert-manager.io/cluster-issuer: letsencrypt-production
+        # console serves at / but is exposed at /console: the OpenShift HAProxy router must
+        # strip the prefix (nginx gets the equivalent rewrite via values-local regex path)
+        haproxy.router.openshift.io/rewrite-target: /
     deployment:
       securityContext:
         runAsUser: null
