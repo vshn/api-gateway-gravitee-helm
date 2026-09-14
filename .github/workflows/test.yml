@@ -25,9 +25,9 @@ jobs:
 
         name: Helm Chart preview
         run: |
-          jq -n '.env=(env | with_entries(select(.key | startswith("APPFLOW_"))))' > ${PWD}/env.yaml
-          jq 'select(.!=null)|{vars:.,env:.} | with_entries(select(.key | startswith("APPFLOW_")))' > "${PWD}/vars.yaml" <<'EOF' ${{ env.NEWLINE }}${{ toJson(vars) }}${{ env.NEWLINE }}EOF
-          jq 'select(.!=null)|{secrets:.,env:.} | with_entries(select(.key | startswith("APPFLOW_")))' > "${PWD}/secrets.yaml" <<'EOF' ${{ env.NEWLINE }}${{ toJson(secrets) }}${{ env.NEWLINE }}EOF
+          jq -n '.env=(env | with_entries(select(.key | startswith("APPFLOW_"))) // {})' > ${PWD}/env.yaml
+          jq 'select(.!=null)|{vars:.,env:.} | with_entries(select(.key | startswith("APPFLOW_"))) // {}' > "${PWD}/vars.yaml" <<'EOF' ${{ env.NEWLINE }}${{ toJson(vars) }}${{ env.NEWLINE }}EOF
+          jq 'select(.!=null)|{secrets:.,env:.} | with_entries(select(.key | startswith("APPFLOW_"))) // {}' > "${PWD}/secrets.yaml" <<'EOF' ${{ env.NEWLINE }}${{ toJson(secrets) }}${{ env.NEWLINE }}EOF
           jq '.env | keys' ${PWD}/env.yaml
           jq '.env | keys' ${PWD}/vars.yaml
           jq '.env | keys' ${PWD}/secrets.yaml
