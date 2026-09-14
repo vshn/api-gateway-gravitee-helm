@@ -19,6 +19,9 @@ jobs:
       - env:
           NEWLINE: |2+
 
+          VARS_JSON: ${{ toJson(vars) }}
+          SECRETS_JSON: ${{ toJson(secrets) }}
+
           POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
           JWT_SECRET: ${{ secrets.JWT_SECRET }}
           ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
@@ -27,9 +30,9 @@ jobs:
         run: |
           jq -n '{env: (env | with_entries(select(.key | startswith("APPFLOW_")) | .key |= ltrimstr("APPFLOW_")))}' > "${PWD}/env.yaml"
 
-          jq '(. // {}) | {vars: (with_entries(select(.key | startswith("APPFLOW_")) | .key |= ltrimstr("APPFLOW_")))}' >  <<'EOF' ${{ env.NEWLINE }}${{ toJson(vars) }}${{ env.NEWLINE }}EOF
-          jq '(. // {}) | {secrets: (with_entries(select(.key | startswith("APPFLOW_")) | .key |= ltrimstr("APPFLOW_")))}' > "${PWD}/secrets.yaml" <<'EOF' ${{ env.NEWLINE }}${{ toJson(secrets) }}${{ env.NEWLINE }}EOF
-            
+          jq '(. // {}) | {vars: (with_entries(select(.key | startswith("APPFLOW_")) | .key |= ltrimstr("APPFLOW_")))}' <<<"$VARS_JSON" > "${PWD}/vars.yaml"
+          jq '(. // {}) | {secrets: (with_entries(select(.key | startswith("APPFLOW_")) | .key |= ltrimstr("APPFLOW_")))}' <<<"$SECRETS_JSON" > "${PWD}/secrets.yaml"
+
           jq '.env | keys' "${PWD}/env.yaml"
           jq '.vars | keys' "${PWD}/vars.yaml"
           jq '.secrets | keys' "${PWD}/secrets.yaml"
