@@ -17,9 +17,9 @@ jobs:
           SECRETS_JSON: "${{ toJson(secrets) }}"
           VARS_JSON: "${{ toJson(vars) }}"
 
-          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
-          JWT_SECRET: ${{ secrets.JWT_SECRET }}
-          ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
+          APPFLOW_POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+          APPFLOW_JWT_SECRET: ${{ secrets.JWT_SECRET }}
+          APPFLOW_ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
         name: Helm Chart preview
         run: |
           ENVV=$(jq -n --arg p 'APPFLOW_' 'env | with_entries(select(.key | startswith($p)))')
@@ -45,9 +45,9 @@ jobs:
 
           SECRETS_JSON: "${{ toJson(secrets) }}"
           VARS_JSON: "${{ toJson(vars) }}"
-          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
-          JWT_SECRET: ${{ secrets.JWT_SECRET }}
-          ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
+          APPFLOW_POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+          APPFLOW_JWT_SECRET: ${{ secrets.JWT_SECRET }}
+          APPFLOW_ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
         name: Helm Chart deploy
         run: |
           ENVV=$(jq -n --arg p 'APPFLOW_' 'env | with_entries(select(.key | startswith($p)))')
