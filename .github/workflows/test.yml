@@ -23,7 +23,7 @@ jobs:
         name: Helm Chart preview
         run: |
           ENVV=$(jq --arg p 'APPFLOW_' 'env | fromjson | with_entries(select(.key | startswith($p)))')
-          VARS=$(jq --arg p 'APPFLOW_' 'env.VARS_JSON | fromjson |  with_entries(select(.key | startswith($p)))'
+          VARS=$(jq --arg p 'APPFLOW_' 'env.VARS_JSON | fromjson |  with_entries(select(.key | startswith($p)))')
           SECRETS=$(jq --arg p 'APPFLOW_' 'env.SECRETS_JSON | fromjson | with_entries(select(.key | startswith($p)))')
 
           jq -n --arg p '' --argjson e "$ENVV" --argjson v "$VARS" --argjson s "$SECRETS" \
@@ -51,7 +51,7 @@ jobs:
         name: Helm Chart deploy
         run: |
           ENVV=$(jq --arg p 'APPFLOW_' 'env | fromjson | with_entries(select(.key | startswith($p)))')
-          VARS=$(jq --arg p 'APPFLOW_' 'env.VARS_JSON | fromjson |  with_entries(select(.key | startswith($p)))'
+          VARS=$(jq --arg p 'APPFLOW_' 'env.VARS_JSON | fromjson |  with_entries(select(.key | startswith($p)))')
           SECRETS=$(jq --arg p 'APPFLOW_' 'env.SECRETS_JSON | fromjson | with_entries(select(.key | startswith($p)))')
 
           
