@@ -26,11 +26,11 @@ jobs:
           VARS=$(jq -n --arg p 'APPFLOW_' 'env.VARS_JSON | fromjson? // {} | with_entries(select(.key | startswith($p)))')
           SECRETS=$(jq -n --arg p 'APPFLOW_' 'env.SECRETS_JSON | fromjson? // {} | with_entries(select(.key | startswith($p)))')
 
-          jq -n --arg p '' --argjson e "$ENVV" --argjson v "$VARS" --argjson s "$SECRETS" \
+          jq -n --arg p 'APPFLOW_' --argjson e "$ENVV" --argjson v "$VARS" --argjson s "$SECRETS" \
             '{env: ($e + $v + $s + ($e + $v + $s | with_entries(.key |= ltrimstr($p))))}' > "${PWD}/env.yaml"
-          jq -n --arg p '' --argjson v "$VARS" \
+          jq -n --arg p 'APPFLOW_' --argjson v "$VARS" \
             '{vars: ($v + ($v | with_entries(.key |= ltrimstr($p))))}' > "${PWD}/vars.yaml"
-          jq -n --arg p '' --argjson s "$SECRETS" \
+          jq -n --arg p 'APPFLOW_' --argjson s "$SECRETS" \
             '{secrets: ($s + ($s | with_entries(.key |= ltrimstr($p))))}' > "${PWD}/secrets.yaml"
           
           jq '.env | keys' "${PWD}/env.yaml"
@@ -54,12 +54,11 @@ jobs:
           VARS=$(jq -n --arg p 'APPFLOW_' 'env.VARS_JSON | fromjson? // {} | with_entries(select(.key | startswith($p)))')
           SECRETS=$(jq -n --arg p 'APPFLOW_' 'env.SECRETS_JSON | fromjson? // {} | with_entries(select(.key | startswith($p)))')
 
-          
-          jq -n --arg p '' --argjson e "$ENVV" --argjson v "$VARS" --argjson s "$SECRETS" \
+          jq -n --arg p 'APPFLOW_' --argjson e "$ENVV" --argjson v "$VARS" --argjson s "$SECRETS" \
             '{env: ($e + $v + $s + ($e + $v + $s | with_entries(.key |= ltrimstr($p))))}' > "${PWD}/env.yaml"
-          jq -n --arg p '' --argjson v "$VARS" \
+          jq -n --arg p 'APPFLOW_' --argjson v "$VARS" \
             '{vars: ($v + ($v | with_entries(.key |= ltrimstr($p))))}' > "${PWD}/vars.yaml"
-          jq -n --arg p '' --argjson s "$SECRETS" \
+          jq -n --arg p 'APPFLOW_' --argjson s "$SECRETS" \
             '{secrets: ($s + ($s | with_entries(.key |= ltrimstr($p))))}' > "${PWD}/secrets.yaml"
           
           cp "${KUBECONFIG}" ".github-ci.kubeconfig"
