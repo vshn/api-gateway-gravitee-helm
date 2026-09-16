@@ -22,7 +22,7 @@ jobs:
           ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
         name: Helm Chart preview
         run: |
-          ENVV=$(jq --arg p 'APPFLOW_' 'env | fromjson | with_entries(select(.key | startswith($p)))')
+          ENVV=$(jq --arg p 'APPFLOW_' 'env | with_entries(select(.key | startswith($p)))')
           VARS=$(jq --arg p 'APPFLOW_' 'env.VARS_JSON | fromjson |  with_entries(select(.key | startswith($p)))')
           SECRETS=$(jq --arg p 'APPFLOW_' 'env.SECRETS_JSON | fromjson | with_entries(select(.key | startswith($p)))')
 
@@ -50,7 +50,7 @@ jobs:
           ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
         name: Helm Chart deploy
         run: |
-          ENVV=$(jq --arg p 'APPFLOW_' 'env | fromjson | with_entries(select(.key | startswith($p)))')
+          ENVV=$(jq --arg p 'APPFLOW_' 'env | with_entries(select(.key | startswith($p)))')
           VARS=$(jq --arg p 'APPFLOW_' 'env.VARS_JSON | fromjson |  with_entries(select(.key | startswith($p)))')
           SECRETS=$(jq --arg p 'APPFLOW_' 'env.SECRETS_JSON | fromjson | with_entries(select(.key | startswith($p)))')
 
