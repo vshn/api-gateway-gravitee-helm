@@ -51,4 +51,4 @@ jobs:
           jq 'select(.!=null)|{secrets:.,env:.}' > "${PWD}/secrets.yaml" <<'EOF' ${{ env.NEWLINE }}${{ toJson(secrets) }}${{ env.NEWLINE }}EOF
           cp "${KUBECONFIG}" ".github-ci.kubeconfig"
           sudo chmod -R o+w $(printf '%s' "$PWD")
-          docker run -v "${PWD}:/data" -w /data ghcr.io/appuio/helm-v4:latest /bin/bash -c "cp .github-ci.kubeconfig /tmp/github-ci.kubeconfig; chmod 400 /tmp/github-ci.kubeconfig; /bin/helm dependency update /data; /bin/helm upgrade --install 'test' /data --namespace '${NAMESPACE}' --values '/data/values.yaml' --values '/data/vars.yaml' --values '/data/secrets.yaml' --kubeconfig /tmp/github-ci.kubeconfig"
+          docker run -v "${PWD}:/data" -w /data ghcr.io/appuio/helm-v4:latest /bin/bash -c "cp .github-ci.kubeconfig /tmp/github-ci.kubeconfig; chmod 400 /tmp/github-ci.kubeconfig; /bin/helm dependency update '/data'; HELM_DIFF_USE_UPGRADE_DRY_RUN=true /bin/helm diff upgrade 'test' '/data' --namespace '${NAMESPACE}' --values '/data/values.yaml' --values '/data/vars.yaml' --values '/data/secrets.yaml' --kubeconfig /tmp/github-ci.kubeconfig --allow-unreleased"
