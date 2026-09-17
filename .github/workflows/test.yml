@@ -23,15 +23,12 @@ jobs:
         name: Helm Chart preview
         run: |
           ENVV=$(jq -n --arg p 'APPFLOW_' 'env | with_entries(select(.key | startswith($p)))')
-          VARS=$(jq -n --arg p 'APPFLOW_' 'env.VARS_JSON | fromjson? // {} | with_entries(select(.key | startswith($p)))')
+          VARS=$(jq -n --arg p 'APPFLOW_' 'env.VARS_JSON | fromjson? // {} |  with_entries(select(.key | startswith($p)))'
           SECRETS=$(jq -n --arg p 'APPFLOW_' 'env.SECRETS_JSON | fromjson? // {} | with_entries(select(.key | startswith($p)))')
-
+  
           jq -n --arg p 'APPFLOW_' --argjson e "$ENVV" --argjson v "$VARS" --argjson s "$SECRETS" \
-            '{env: ($e + $v + $s + ($e + $v + $s | with_entries(.key |= ltrimstr($p))))}' > "${PWD}/env.yaml"
-          jq -n --arg p 'APPFLOW_' --argjson v "$VARS" \
-            '{vars: ($v + ($v | with_entries(.key |= ltrimstr($p))))}' > "${PWD}/vars.yaml"
-          jq -n --arg p 'APPFLOW_' --argjson s "$SECRETS" \
-            '{secrets: ($s + ($s | with_entries(.key |= ltrimstr($p))))}' > "${PWD}/secrets.yaml"
+          '{env: ($e + $v + $s + ($e + $v + $s | with_entries(.key |= ltrimstr($p))))}' > "${PWD}/env.yaml"
+
           
           jq '.env | keys' "${PWD}/env.yaml"
           jq '.vars | keys' "${PWD}/vars.yaml"
@@ -51,16 +48,12 @@ jobs:
         name: Helm Chart deploy
         run: |
           ENVV=$(jq -n --arg p 'APPFLOW_' 'env | with_entries(select(.key | startswith($p)))')
-          VARS=$(jq -n --arg p 'APPFLOW_' 'env.VARS_JSON | fromjson? // {} | with_entries(select(.key | startswith($p)))')
+          VARS=$(jq -n --arg p 'APPFLOW_' 'env.VARS_JSON | fromjson? // {} |  with_entries(select(.key | startswith($p)))'
           SECRETS=$(jq -n --arg p 'APPFLOW_' 'env.SECRETS_JSON | fromjson? // {} | with_entries(select(.key | startswith($p)))')
-
+  
           jq -n --arg p 'APPFLOW_' --argjson e "$ENVV" --argjson v "$VARS" --argjson s "$SECRETS" \
-            '{env: ($e + $v + $s + ($e + $v + $s | with_entries(.key |= ltrimstr($p))))}' > "${PWD}/env.yaml"
-          jq -n --arg p 'APPFLOW_' --argjson v "$VARS" \
-            '{vars: ($v + ($v | with_entries(.key |= ltrimstr($p))))}' > "${PWD}/vars.yaml"
-          jq -n --arg p 'APPFLOW_' --argjson s "$SECRETS" \
-            '{secrets: ($s + ($s | with_entries(.key |= ltrimstr($p))))}' > "${PWD}/secrets.yaml"
-          
+          '{env: ($e + $v + $s + ($e + $v + $s | with_entries(.key |= ltrimstr($p))))}' > "${PWD}/env.yaml"
+        
           cp "${KUBECONFIG}" ".github-ci.kubeconfig"
           sudo chmod -R o+w $(printf '%s' "$PWD")
           docker run -v "${PWD}:/data" -w /data ghcr.io/appuio/helm-v4:latest /bin/bash -c "cp .github-ci.kubeconfig /tmp/github-ci.kubeconfig; chmod 400 /tmp/github-ci.kubeconfig; /bin/helm dependency update '/data'; HELM_DIFF_USE_UPGRADE_DRY_RUN=true /bin/helm diff upgrade 'test' '/data' --namespace '${NAMESPACE}' --values '/data/values.yaml' --values '/data/vars.yaml' --values '/data/secrets.yaml' --kubeconfig /tmp/github-ci.kubeconfig --allow-unreleased"
